@@ -20,6 +20,10 @@ model User {
 
   caregivers PatientCaregiver[]
   sessions   UserSession[]
+  createdRooms Room[]
+  roomMembers  RoomMember[]
+  createdThreads Thread[]
+  authoredMessages Message[]
 }
 
 model UserSession {
@@ -140,4 +144,74 @@ enum CaregiverRole {
   OWNER
   EDITOR
   VIEWER
+}
+
+enum RoomVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum RoomMemberRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+model Room {
+  id           String          @id @default(cuid())
+  name         String
+  visibility   RoomVisibility  @default(PRIVATE)
+  createdById  String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  createdBy    User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  members      RoomMember[]
+  threads      Thread[]
+
+  @@index([createdById])
+}
+
+model RoomMember {
+  id       String          @id @default(cuid())
+  roomId   String
+  userId   String
+  role     RoomMemberRole  @default(MEMBER)
+  joinedAt DateTime        @default(now())
+
+  room     Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([userId])
+}
+
+model Thread {
+  id          String   @id @default(cuid())
+  roomId      String
+  title       String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages    Message[]
+
+  @@index([roomId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  authorId  String
+  content   String
+  editedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  thread    Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([threadId])
+  @@index([authorId])
 }

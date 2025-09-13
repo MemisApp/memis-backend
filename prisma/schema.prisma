@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role     @default(CAREGIVER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  caregivers PatientCaregiver[]
+  sessions   UserSession[]
+}
+
+model UserSession {
+  id               String   @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  userAgent        String?
+  ip               String?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Patient {
+  id          String    @id @default(cuid())
+  firstName   String
+  lastName    String
+  birthDate   DateTime?
+  avatarUrl   String?
+  shortIntro  String?
+  maritalDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  caregivers  PatientCaregiver[]
+  reminders   Reminder[]
+  contacts    Contact[]
+  devices     Device[]
+  PairingCode PairingCode[]
+}
+
+model PatientCaregiver {
+  id          String        @id @default(cuid())
+  patientId   String
+  caregiverId String
+  role        CaregiverRole @default(OWNER)
+  createdAt   DateTime      @default(now())
+
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caregiver User    @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, caregiverId])
+}
+
+model PairingCode {
+  id        String    @id @default(cuid())
+  patientId String
+  code      String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdBy String // caregiver user id
+  createdAt DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id               String    @id @default(cuid())
+  patientId        String
+  platform         String // ios | android | web
+  devicePublicId   String
+  deviceName       String?
+  refreshTokenHash String?
+  isPrimary        Boolean   @default(false)
+  lastSeenAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, devicePublicId])
+  @@index([patientId])
+}
+
+model Reminder {
+  id          String    @id @default(cuid())
+  patientId   String
+  type        String // PILLS | DOOR_LOCK | TEETH | PET_CARE | CUSTOM
+  title       String
+  notes       String?
+  schedule    String? // cron arba HH:MM
+  isActive    Boolean   @default(true)
+  lastFiredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  patientId String
+  relation  String // SISTER | SPOUSE | CHILD | FRIEND | OTHER
+  name      String
+  phone     String
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+enum Role {
+  CAREGIVER
+  PATIENT
+  ADMIN
+}
+
+enum CaregiverRole {
+  OWNER
+  EDITOR
+  VIEWER
+}

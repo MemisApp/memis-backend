@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -79,6 +83,62 @@ export class AuthService {
     const accessToken = await this.signAccessToken(user.id, user.role);
 
     return { user, accessToken, refreshToken, sessionId: session.id };
+  }
+
+  async login(
+    email: string,
+    password: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    if (!user || !(await this.verify(password, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + REFRESH_TTL_DAYS);
+
+    const session = await this.prisma.userSession.create({
+      data: {
+        userId: user.id,
+        refreshTokenHash: '-',
+        ip,
+        userAgent,
+        expiresAt,
+      },
+    });
+
+    const refreshToken = await this.signRefreshToken(
+      user.id,
+      session.id,
+      expiresAt,
+    );
+    const refreshTokenHash = await this.hash(refreshToken);
+
+    await this.prisma.userSession.update({
+      where: { id: session.id },
+      data: { refreshTokenHash },
+    });
+
+    const accessToken = await this.signAccessToken(user.id, user.role);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      accessToken,
+      refreshToken,
+      sessionId: session.id,
+    };
   }
 
   private async signAccessToken(userId: string, role: string) {

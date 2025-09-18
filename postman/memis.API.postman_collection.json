@@ -1,0 +1,276 @@
+{
+  "info": { "name": "Memis API (15 endpoints demo)", "_postman_id": "03da6d3e-0000-4c7e-9e18-000000000001", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "item": [
+    {
+      "name": "00 Auth",
+      "item": [
+        {
+          "name": "Login (Caregiver) → set accessToken",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.code === 200);",
+                  "pm.test('JSON', () => /application\\/json/i.test(pm.response.headers.get('Content-Type')||''));",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('accessToken', data.accessToken);",
+                  "pm.expect(data.accessToken).to.be.a('string');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 Rooms (5 endpoints)",
+      "auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{accessToken}}", "type": "string" } ] },
+      "item": [
+        {
+          "name": "Create Room (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/rooms",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Demo Room {{timestamp}}\",\n  \"visibility\": \"PRIVATE\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('201 Created', () => pm.response.code === 201 || pm.response.code === 200);",
+              "pm.test('JSON', () => /application\\/json/i.test(pm.response.headers.get('Content-Type')||''));",
+              "const r = pm.response.json(); pm.environment.set('roomId', r.id); pm.expect(r.id).to.be.a('string');"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "List Rooms (200, LIST)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rooms?page=1&pageSize=20" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200 OK', ()=> pm.response.code === 200);",
+              "pm.test('JSON', ()=> /application\\/json/i.test(pm.response.headers.get('Content-Type')||''));",
+              "const d = pm.response.json(); pm.expect(d).to.have.keys(['items','page','pageSize','total']);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Get Room (200, READ)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rooms/{{roomId}}" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200 OK', ()=> pm.response.code === 200);",
+              "pm.test('JSON', ()=> /application\\/json/i.test(pm.response.headers.get('Content-Type')||''));",
+              "pm.expect(pm.response.json()).to.have.property('id', pm.environment.get('roomId'));"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Update Room (200, UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": "{{baseUrl}}/api/rooms/{{roomId}}",
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Updated Room {{timestamp}}\" }" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200 OK', ()=> pm.response.code === 200);",
+              "pm.test('JSON', ()=> /application\\/json/i.test(pm.response.headers.get('Content-Type')||''));"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Delete Room (204/200, DELETE)",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/rooms/{{roomId}}" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200/204 on delete', ()=> [200,204].includes(pm.response.code));"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "NEG: Get Room 404",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rooms/{{nonexistentId}}" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('404', ()=> pm.response.code === 404);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "NEG: Create Room bad payload (400/422)",
+          "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": "{{baseUrl}}/api/rooms", "body": { "mode": "raw", "raw": "{}" } },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('400/422', ()=> [400,422].includes(pm.response.code));"
+            ], "type": "text/javascript" } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Threads (5 endpoints)",
+      "auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{accessToken}}", "type": "string" } ] },
+      "item": [
+        {
+          "name": "Create Room (for threads)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/rooms",
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Room for Threads {{timestamp}}\", \"visibility\": \"PRIVATE\" }" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const r = pm.response.json(); pm.environment.set('roomId', r.id);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Create Thread in Room (201, HIER)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/rooms/{{roomId}}/threads",
+            "body": { "mode": "raw", "raw": "{ \"title\": \"Week meds {{timestamp}}\" }" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('201/200', ()=> [200,201].includes(pm.response.code));",
+              "const t = pm.response.json(); pm.environment.set('threadId', t.id);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "List Threads in Room (200, HIER)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rooms/{{roomId}}/threads?page=1&pageSize=20" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200', ()=> pm.response.code === 200);",
+              "const d = pm.response.json(); pm.expect(d).to.have.keys(['items','page','pageSize','total']);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Get Thread (200, READ)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/threads/{{threadId}}" },
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200', ()=> pm.response.code === 200);"
+            ], "type": "text/javascript" } }
+          ]
+        },
+        {
+          "name": "Update Thread (200, UPDATE)",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/threads/{{threadId}}", "body": { "mode": "raw", "raw": "{ \"title\": \"Updated title {{timestamp}}\" }" } },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', ()=> pm.response.code === 200);"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Delete Thread (204/200, DELETE)",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/threads/{{threadId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200/204', ()=> [200,204].includes(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "NEG: Get Thread 404",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/threads/{{nonexistentId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('404', ()=> pm.response.code === 404);"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "03 Messages (5 endpoints)",
+      "auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{accessToken}}", "type": "string" } ] },
+      "item": [
+        {
+          "name": "Create Thread (for messages)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/rooms/{{roomId}}/threads",
+            "body": { "mode": "raw", "raw": "{ \"title\": \"Thread for messages {{timestamp}}\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const t = pm.response.json(); pm.environment.set('threadId', t.id);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Create Message (201, HIER)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/threads/{{threadId}}/messages",
+            "body": { "mode": "raw", "raw": "{ \"content\": \"Don’t forget pills at 20:00!\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201/200', ()=> [200,201].includes(pm.response.code));",
+            "const m = pm.response.json(); pm.environment.set('messageId', m.id);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "List Messages (200, HIER, LIST)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/threads/{{threadId}}/messages?page=1&pageSize=50" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', ()=> pm.response.code === 200);",
+            "const d = pm.response.json(); pm.expect(d).to.have.keys(['items','page','pageSize','total']);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Get Message (200, READ)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/messages/{{messageId}}" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', ()=> pm.response.code === 200);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Update Message (200, UPDATE)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/messages/{{messageId}}",
+            "body": { "mode": "raw", "raw": "{ \"content\": \"Updated: take pills at 20:30.\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', ()=> pm.response.code === 200);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Delete Message (204/200, DELETE)",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/messages/{{messageId}}" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200/204', ()=> [200,204].includes(pm.response.code));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "NEG: Create Message bad payload (400/422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/threads/{{threadId}}/messages",
+            "body": { "mode": "raw", "raw": "{ \"content\": \"\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400/422', ()=> [400,422].includes(pm.response.code));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "NEG: Get Message 404",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/messages/{{nonexistentId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('404', ()=> pm.response.code === 404);"], "type": "text/javascript" } }]
+        }
+      ]
+    }
+  ]
+}

@@ -24,8 +24,7 @@ import { RoomsService } from './rooms.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 
-// TODO: Import and use JwtAuthGuard when available
-// import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -36,15 +35,25 @@ interface AuthenticatedRequest extends Request {
 
 @ApiTags('rooms')
 @ApiBearerAuth('access-token')
-// @UseGuards(JwtAuthGuard) // TODO: Enable when JwtAuthGuard is available
+@UseGuards(JwtAuthGuard)
 @Controller('api/rooms')
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get user rooms (paginated)' })
-  @ApiQuery({ name: 'page', required: false, example: 1, description: 'Page number' })
-  @ApiQuery({ name: 'pageSize', required: false, example: 20, description: 'Items per page' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    example: 20,
+    description: 'Items per page',
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved user rooms',
@@ -78,7 +87,7 @@ export class RoomsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     const pageNum = page ? parseInt(page, 10) : 1;
     const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 20;
 
@@ -110,11 +119,11 @@ export class RoomsController {
     @Request() req: AuthenticatedRequest,
     @Body() createRoomDto: CreateRoomDto,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.roomsService.createRoom(userId, createRoomDto);
   }
 
-  @Get(':roomId')
+  @Get('/:roomId')
   @ApiOperation({ summary: 'Get room by ID' })
   @ApiParam({ name: 'roomId', description: 'Room ID' })
   @ApiResponse({
@@ -139,11 +148,11 @@ export class RoomsController {
     @Request() req: AuthenticatedRequest,
     @Param('roomId') roomId: string,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.roomsService.getRoomById(userId, roomId);
   }
 
-  @Put(':roomId')
+  @Put('/:roomId')
   @ApiOperation({ summary: 'Update room (owner/moderator only)' })
   @ApiParam({ name: 'roomId', description: 'Room ID' })
   @ApiResponse({
@@ -171,11 +180,11 @@ export class RoomsController {
     @Param('roomId') roomId: string,
     @Body() updateRoomDto: UpdateRoomDto,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.roomsService.updateRoom(userId, roomId, updateRoomDto);
   }
 
-  @Delete(':roomId')
+  @Delete('/:roomId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete room (owner or admin only)' })
   @ApiParam({ name: 'roomId', description: 'Room ID' })
@@ -196,7 +205,7 @@ export class RoomsController {
     @Request() req: AuthenticatedRequest,
     @Param('roomId') roomId: string,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.roomsService.deleteRoom(userId, roomId);
   }
 }

@@ -1,0 +1,20 @@
+[
+  {
+    "roomName": "Family Room Alpha",
+    "roomVisibility": "PRIVATE",
+    "threadTitle": "Medication Plan Alpha",
+    "messageContent": "Take pills at 20:00."
+  },
+  {
+    "roomName": "Family Room Beta",
+    "roomVisibility": "PRIVATE",
+    "threadTitle": "Appointments Beta",
+    "messageContent": "Doctor visit tomorrow at 10:00."
+  },
+  {
+    "roomName": "Public Square",
+    "roomVisibility": "PUBLIC",
+    "threadTitle": "Announcements",
+    "messageContent": "Welcome to the room."
+  }
+]

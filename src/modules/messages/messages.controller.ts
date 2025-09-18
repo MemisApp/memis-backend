@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  UseGuards,
   Request,
   HttpCode,
   HttpStatus,
@@ -24,8 +25,7 @@ import { MessagesService } from './messages.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 
-// TODO: Import and use JwtAuthGuard when available
-// import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -36,12 +36,12 @@ interface AuthenticatedRequest extends Request {
 
 @ApiTags('messages')
 @ApiBearerAuth('access-token')
-// @UseGuards(JwtAuthGuard) // TODO: Enable when JwtAuthGuard is available
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
-  @Get('api/threads/:threadId/messages')
+  @Get('/api/threads/:threadId/messages')
   @ApiOperation({ summary: 'List messages in a thread (hierarchical)' })
   @ApiParam({ name: 'threadId', description: 'Thread ID' })
   @ApiQuery({
@@ -92,7 +92,7 @@ export class MessagesController {
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     const pageNum = Math.max(1, page || 1);
     const pageSizeNum = Math.min(Math.max(1, pageSize || 50), 100); // Clamp between 1-100
 
@@ -104,7 +104,7 @@ export class MessagesController {
     );
   }
 
-  @Post('api/threads/:threadId/messages')
+  @Post('/api/threads/:threadId/messages')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create message in a thread (hierarchical)' })
   @ApiParam({ name: 'threadId', description: 'Thread ID' })
@@ -135,7 +135,7 @@ export class MessagesController {
     @Param('threadId') threadId: string,
     @Body() createMessageDto: CreateMessageDto,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.messagesService.createInThread(
       userId,
       threadId,
@@ -143,7 +143,7 @@ export class MessagesController {
     );
   }
 
-  @Get('api/messages/:messageId')
+  @Get('/api/messages/:messageId')
   @ApiOperation({ summary: 'Get message by id' })
   @ApiParam({ name: 'messageId', description: 'Message ID' })
   @ApiResponse({
@@ -168,11 +168,11 @@ export class MessagesController {
     @Request() req: AuthenticatedRequest,
     @Param('messageId') messageId: string,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
     return this.messagesService.getById(userId, messageId);
   }
 
-  @Put('api/messages/:messageId')
+  @Put('/api/messages/:messageId')
   @ApiOperation({ summary: 'Update message' })
   @ApiParam({ name: 'messageId', description: 'Message ID' })
   @ApiResponse({
@@ -202,8 +202,8 @@ export class MessagesController {
     @Param('messageId') messageId: string,
     @Body() updateMessageDto: UpdateMessageDto,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
-    const userRole = req.user?.role || 'CAREGIVER'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
+    const userRole = req.user.role;
     return this.messagesService.updateById(
       userId,
       userRole,
@@ -212,7 +212,7 @@ export class MessagesController {
     );
   }
 
-  @Delete('api/messages/:messageId')
+  @Delete('/api/messages/:messageId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete message' })
   @ApiParam({ name: 'messageId', description: 'Message ID' })
@@ -233,8 +233,8 @@ export class MessagesController {
     @Request() req: AuthenticatedRequest,
     @Param('messageId') messageId: string,
   ) {
-    const userId = req.user?.id || 'clm1tempuserid00000000000000'; // TODO: Remove when JwtAuthGuard is available
-    const userRole = req.user?.role || 'CAREGIVER'; // TODO: Remove when JwtAuthGuard is available
+    const userId = req.user.id;
+    const userRole = req.user.role;
     return this.messagesService.deleteById(userId, userRole, messageId);
   }
 }

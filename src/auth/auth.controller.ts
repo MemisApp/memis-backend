@@ -1,6 +1,15 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request, Response } from 'express';
 import {
   ApiBody,
@@ -9,6 +18,7 @@ import {
   ApiTags,
   ApiOkResponse,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 
 @ApiTags('Auth')
@@ -236,5 +246,52 @@ export class AuthController {
       refreshToken,
       deviceId,
     };
+  }
+
+  @Post('logout')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Logout user (invalidate session)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to logout specific session. If not provided, logs out all sessions for the user.',
+          example: 'session-id-123',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Logout successful',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async logout(
+    @Body() body: { sessionId?: string },
+    @Req() req: Request & { user: { id: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const userId = req.user.id;
+    const result = await this.auth.logout(userId, body.sessionId);
+
+    // Clear the refresh token cookie
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/auth/refresh',
+    });
+
+    return result;
   }
 }

@@ -9,6 +9,12 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 
+interface DeviceInfo {
+  platform: string;
+  deviceName: string;
+  deviceId: string;
+}
+
 const ACCESS_TTL = '15m';
 const REFRESH_TTL_DAYS = 30;
 
@@ -32,9 +38,7 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const exists = await this.prisma.user.findUnique({ where: { email } });
     if (exists)
-      throw new ConflictException(
-        'Vartotojas su tokiu el. paštu jau egzistuoja',
-      );
+      throw new ConflictException('User with this email already exists');
 
     const passwordHash = await this.hash(dto.password);
     const user = await this.prisma.user.create({
@@ -165,7 +169,7 @@ export class AuthService {
     );
   }
 
-  async patientLogin(pairingCode: string, deviceInfo: any) {
+  async patientLogin(pairingCode: string, deviceInfo: DeviceInfo) {
     // Find valid pairing code
     const pairing = await this.prisma.pairingCode.findFirst({
       where: {
@@ -246,9 +250,11 @@ export class AuthService {
     };
   }
 
-  async deviceLogin(deviceToken: string, pinCode?: string) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async deviceLogin(deviceToken: string, _pinCode?: string) {
     // For now, we'll use deviceToken as deviceId (simplified)
     // In production, you'd want to implement proper device tokens
+    // _pinCode is reserved for future PIN-based authentication
     const device = await this.prisma.device.findUnique({
       where: { id: deviceToken },
       include: {
@@ -303,5 +309,26 @@ export class AuthService {
         expiresIn: Math.floor((+expiresAt - Date.now()) / 1000),
       },
     );
+  }
+
+  async logout(userId: string, sessionId?: string) {
+    if (sessionId) {
+      // Logout specific session
+      await this.prisma.userSession.deleteMany({
+        where: {
+          id: sessionId,
+          userId,
+        },
+      });
+    } else {
+      // Logout all sessions for the user
+      await this.prisma.userSession.deleteMany({
+        where: {
+          userId,
+        },
+      });
+    }
+
+    return { success: true };
   }
 }

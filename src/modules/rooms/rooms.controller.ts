@@ -95,6 +95,58 @@ export class RoomsController {
     return this.roomsService.findMyRooms(userId, pageNum, pageSizeNum);
   }
 
+  @Get('public')
+  @ApiOperation({ summary: 'Get public rooms (discoverable by all users)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    example: 20,
+    description: 'Items per page',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved public rooms',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              visibility: { type: 'string', enum: ['PUBLIC'] },
+              createdById: { type: 'string' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        page: { type: 'number' },
+        pageSize: { type: 'number' },
+        total: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid query parameters' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findPublicRooms(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 20;
+
+    return this.roomsService.findPublicRooms(pageNum, pageSizeNum);
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new room' })
@@ -207,8 +259,7 @@ export class RoomsController {
     @Param('roomId') roomId: string,
   ) {
     const userId = req.user.id;
-    const userRole = req.user.role;
-    return this.roomsService.deleteRoom(roomId, userId);
+    return this.roomsService.deleteRoom(userId, roomId);
   }
 
   @Post('/:roomId/members')

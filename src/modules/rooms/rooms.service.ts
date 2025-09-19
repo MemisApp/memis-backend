@@ -19,11 +19,20 @@ export class RoomsService {
     const [items, total] = await Promise.all([
       this.prisma.room.findMany({
         where: {
-          members: {
-            some: {
-              userId,
+          OR: [
+            // Rooms where user is a member
+            {
+              members: {
+                some: {
+                  userId,
+                },
+              },
             },
-          },
+            // Public rooms (regardless of membership)
+            {
+              visibility: 'PUBLIC',
+            },
+          ],
         },
         select: {
           id: true,
@@ -41,11 +50,57 @@ export class RoomsService {
       }),
       this.prisma.room.count({
         where: {
-          members: {
-            some: {
-              userId,
+          OR: [
+            // Rooms where user is a member
+            {
+              members: {
+                some: {
+                  userId,
+                },
+              },
             },
-          },
+            // Public rooms (regardless of membership)
+            {
+              visibility: 'PUBLIC',
+            },
+          ],
+        },
+      }),
+    ]);
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+    };
+  }
+
+  async findPublicRooms(page: number = 1, pageSize: number = 20) {
+    const skip = (page - 1) * pageSize;
+
+    const [items, total] = await Promise.all([
+      this.prisma.room.findMany({
+        where: {
+          visibility: 'PUBLIC',
+        },
+        select: {
+          id: true,
+          name: true,
+          visibility: true,
+          createdById: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.room.count({
+        where: {
+          visibility: 'PUBLIC',
         },
       }),
     ]);
@@ -95,11 +150,6 @@ export class RoomsService {
   }
 
   async getRoomById(userId: string, roomId: string) {
-    const isMember = await this.isMember(userId, roomId);
-    if (!isMember) {
-      throw new ForbiddenException('NOT_ROOM_MEMBER');
-    }
-
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
       select: {
@@ -114,6 +164,17 @@ export class RoomsService {
 
     if (!room) {
       throw new NotFoundException('ROOM_NOT_FOUND');
+    }
+
+    // Allow access to public rooms for everyone
+    if (room.visibility === 'PUBLIC') {
+      return room;
+    }
+
+    // For private rooms, check if user is a member
+    const isMember = await this.isMember(userId, roomId);
+    if (!isMember) {
+      throw new ForbiddenException('NOT_ROOM_MEMBER');
     }
 
     return room;
@@ -294,7 +355,7 @@ export class RoomsService {
       data: {
         roomId,
         userId: targetUserId,
-        role: role as any,
+        role: role as RoomMemberRole,
       },
       include: {
         user: {

@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
-import { RoomMemberRole, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class ThreadsService {
@@ -18,10 +18,25 @@ export class ThreadsService {
     page: number = 1,
     pageSize: number = 20,
   ) {
-    // Check membership in room
-    const isMember = await this.isRoomMember(userId, roomId);
-    if (!isMember) {
-      throw new ForbiddenException('NOT_ROOM_MEMBER');
+    // Check if room exists and get its visibility
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      select: { id: true, visibility: true },
+    });
+
+    if (!room) {
+      throw new NotFoundException('ROOM_NOT_FOUND');
+    }
+
+    // Allow access to public rooms for everyone
+    if (room.visibility === 'PUBLIC') {
+      // Continue to fetch threads
+    } else {
+      // For private rooms, check membership
+      const isMember = await this.isRoomMember(userId, roomId);
+      if (!isMember) {
+        throw new ForbiddenException('NOT_ROOM_MEMBER');
+      }
     }
 
     const skip = (page - 1) * pageSize;
@@ -55,18 +70,24 @@ export class ThreadsService {
   }
 
   async createInRoom(userId: string, roomId: string, dto: CreateThreadDto) {
-    // Check membership in room
-    const isMember = await this.isRoomMember(userId, roomId);
-    if (!isMember) {
-      throw new ForbiddenException('NOT_ROOM_MEMBER');
-    }
-
-    // Verify room exists
+    // Verify room exists and get its visibility
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
+      select: { id: true, visibility: true },
     });
     if (!room) {
       throw new NotFoundException('ROOM_NOT_FOUND');
+    }
+
+    // Allow thread creation in public rooms for everyone
+    if (room.visibility === 'PUBLIC') {
+      // Continue to create thread
+    } else {
+      // For private rooms, check membership
+      const isMember = await this.isRoomMember(userId, roomId);
+      if (!isMember) {
+        throw new ForbiddenException('NOT_ROOM_MEMBER');
+      }
     }
 
     return this.prisma.thread.create({
@@ -87,7 +108,7 @@ export class ThreadsService {
   }
 
   async getById(userId: string, threadId: string) {
-    // Load thread with roomId
+    // Load thread with roomId and room visibility
     const thread = await this.prisma.thread.findUnique({
       where: { id: threadId },
       select: {
@@ -97,6 +118,11 @@ export class ThreadsService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        room: {
+          select: {
+            visibility: true,
+          },
+        },
       },
     });
 
@@ -104,13 +130,32 @@ export class ThreadsService {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Check membership in thread's room
+    // Allow access to threads in public rooms for everyone
+    if (thread.room.visibility === 'PUBLIC') {
+      return {
+        id: thread.id,
+        title: thread.title,
+        roomId: thread.roomId,
+        createdById: thread.createdById,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+      };
+    }
+
+    // For private rooms, check membership
     const isMember = await this.isRoomMember(userId, thread.roomId);
     if (!isMember) {
       throw new ForbiddenException('NOT_ROOM_MEMBER');
     }
 
-    return thread;
+    return {
+      id: thread.id,
+      title: thread.title,
+      roomId: thread.roomId,
+      createdById: thread.createdById,
+      createdAt: thread.createdAt,
+      updatedAt: thread.updatedAt,
+    };
   }
 
   async updateById(userId: string, threadId: string, dto: UpdateThreadDto) {

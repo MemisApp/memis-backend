@@ -170,6 +170,10 @@ export class ContactsService {
     userId: string,
     patientId: string,
   ): Promise<boolean> {
+    // Allow the patient themselves to access their own contacts
+    if (userId === patientId) {
+      return true;
+    }
     const relation = await this.prisma.patientCaregiver.findUnique({
       where: {
         patientId_caregiverId: {

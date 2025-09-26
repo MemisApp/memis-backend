@@ -37,6 +37,8 @@ export class RemindersService {
         notes: true,
         schedule: true,
         isActive: true,
+        completed: true,
+        completedAt: true,
         lastFiredAt: true,
         createdAt: true,
         updatedAt: true,
@@ -62,6 +64,8 @@ export class RemindersService {
         notes: true,
         schedule: true,
         isActive: true,
+        completed: true,
+        completedAt: true,
         lastFiredAt: true,
         createdAt: true,
         updatedAt: true,
@@ -72,7 +76,13 @@ export class RemindersService {
       ],
     });
 
-    return reminders;
+    // Process reminders to reset daily completion status
+    const processedReminders = reminders.map((reminder) => ({
+      ...reminder,
+      completed: this.isCompletedToday(reminder.completedAt),
+    }));
+
+    return processedReminders;
   }
 
   async findOne(reminderId: string, userId: string) {
@@ -86,6 +96,8 @@ export class RemindersService {
         notes: true,
         schedule: true,
         isActive: true,
+        completed: true,
+        completedAt: true,
         lastFiredAt: true,
         createdAt: true,
         updatedAt: true,
@@ -102,7 +114,11 @@ export class RemindersService {
       throw new ForbiddenException('No access to this reminder');
     }
 
-    return reminder;
+    // Process completion status based on daily reset
+    return {
+      ...reminder,
+      completed: this.isCompletedToday(reminder.completedAt),
+    };
   }
 
   async update(reminderId: string, userId: string, dto: UpdateReminderDto) {
@@ -142,13 +158,19 @@ export class RemindersService {
         notes: true,
         schedule: true,
         isActive: true,
+        completed: true,
+        completedAt: true,
         lastFiredAt: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
-    return updatedReminder;
+    // Process completion status based on daily reset
+    return {
+      ...updatedReminder,
+      completed: this.isCompletedToday(updatedReminder.completedAt),
+    };
   }
 
   async remove(reminderId: string, userId: string) {
@@ -182,7 +204,7 @@ export class RemindersService {
   async markCompleted(reminderId: string, userId: string) {
     const reminder = await this.prisma.reminder.findUnique({
       where: { id: reminderId },
-      select: { id: true, patientId: true },
+      select: { id: true, patientId: true, completedAt: true },
     });
 
     if (!reminder) {
@@ -195,9 +217,18 @@ export class RemindersService {
       throw new ForbiddenException('No access to this reminder');
     }
 
+    const now = new Date();
+
+    // Check if already completed today
+    const isCompletedToday = this.isCompletedToday(reminder.completedAt);
+
     const updatedReminder = await this.prisma.reminder.update({
       where: { id: reminderId },
-      data: { lastFiredAt: new Date() },
+      data: {
+        completed: true,
+        completedAt: now,
+        lastFiredAt: now,
+      },
       select: {
         id: true,
         type: true,
@@ -205,6 +236,8 @@ export class RemindersService {
         notes: true,
         schedule: true,
         isActive: true,
+        completed: true,
+        completedAt: true,
         lastFiredAt: true,
         createdAt: true,
         updatedAt: true,
@@ -218,6 +251,10 @@ export class RemindersService {
     userId: string,
     patientId: string,
   ): Promise<boolean> {
+    // Allow the patient to access their own reminders
+    if (userId === patientId) {
+      return true;
+    }
     const relation = await this.prisma.patientCaregiver.findUnique({
       where: {
         patientId_caregiverId: {
@@ -248,5 +285,24 @@ export class RemindersService {
       (relation.role === CaregiverRole.OWNER ||
         relation.role === CaregiverRole.EDITOR)
     );
+  }
+
+  /**
+   * Check if a reminder was completed today
+   * This enables daily reset functionality
+   */
+  private isCompletedToday(completedAt: Date | null): boolean {
+    if (!completedAt) {
+      return false;
+    }
+
+    const today = new Date();
+    const completedDate = new Date(completedAt);
+
+    // Reset time to start of day for comparison
+    today.setHours(0, 0, 0, 0);
+    completedDate.setHours(0, 0, 0, 0);
+
+    return today.getTime() === completedDate.getTime();
   }
 }

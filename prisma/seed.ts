@@ -76,15 +76,7 @@ async function main() {
       },
     ],
   });
-
-  console.log('Seeded:');
-  console.log({
-    admin: admin.email,
-    caregiver: caregiver.email,
-    password,
-    roomId: room.id,
-    threadId: thread.id,
-  });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
 main().then(() => prisma.$disconnect());

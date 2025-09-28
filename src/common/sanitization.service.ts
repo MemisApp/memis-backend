@@ -40,9 +40,7 @@ export class SanitizationService {
    * Sanitize phone number
    */
   sanitizePhone(phone: string): string {
-    return phone
-      .trim()
-      .replace(/[^\d\+\-\(\)\s]/g, ''); // Only allow digits, +, -, (), spaces
+    return phone.trim().replace(/[^\d\+\-\(\)\s]/g, ''); // Only allow digits, +, -, (), spaces
   }
 
   /**

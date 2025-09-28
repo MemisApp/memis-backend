@@ -108,7 +108,10 @@ export class DevicesService {
     return { success: true };
   }
 
-  private async hasPatientAccess(userId: string, patientId: string): Promise<boolean> {
+  private async hasPatientAccess(
+    userId: string,
+    patientId: string,
+  ): Promise<boolean> {
     const relation = await this.prisma.patientCaregiver.findUnique({
       where: {
         patientId_caregiverId: {

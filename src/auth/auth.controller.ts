@@ -178,7 +178,13 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
   @ApiResponse({ status: 401, description: 'Invalid or expired pairing code' })
-  async patientLogin(@Body() body: { pairingCode: string; deviceInfo: any }) {
+  async patientLogin(
+    @Body()
+    body: {
+      pairingCode: string;
+      deviceInfo: { platform: string; deviceName: string; deviceId: string };
+    },
+  ) {
     const { patient, accessToken, refreshToken, deviceId } =
       await this.auth.patientLogin(body.pairingCode, body.deviceInfo);
 

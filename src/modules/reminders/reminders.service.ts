@@ -220,7 +220,7 @@ export class RemindersService {
     const now = new Date();
 
     // Check if already completed today
-    const isCompletedToday = this.isCompletedToday(reminder.completedAt);
+    this.isCompletedToday(reminder.completedAt);
 
     const updatedReminder = await this.prisma.reminder.update({
       where: { id: reminderId },

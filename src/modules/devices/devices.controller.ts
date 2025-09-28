@@ -36,7 +36,7 @@ export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
   @Get('/api/patients/:patientId/devices')
-  @ApiOperation({ summary: 'Get patient\'s registered devices' })
+  @ApiOperation({ summary: "Get patient's registered devices" })
   @ApiParam({ name: 'patientId', description: 'Patient ID' })
   @ApiResponse({
     status: 200,

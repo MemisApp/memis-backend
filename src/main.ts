@@ -2,12 +2,22 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Request, Response } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     cors: { origin: true, credentials: true },
   });
   app.use(cookieParser());
+
+  // Redirect root URL to health endpoint
+  app.use('/', (req: Request, res: Response, next: () => void) => {
+    if (req.path === '/') {
+      res.redirect('/health');
+    } else {
+      next();
+    }
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Memis API')

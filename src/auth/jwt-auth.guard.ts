@@ -8,6 +8,20 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    role: string;
+  };
+}
+
+interface JwtPayload {
+  sub: string;
+  role: string;
+  iat?: number;
+  exp?: number;
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -16,27 +30,28 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractTokenFromHeader(request);
-    
+
     if (!token) {
       throw new UnauthorizedException('Access token required');
     }
-    
+
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
-      
+
       // Add user info to request object
-      request['user'] = {
+      request.user = {
         id: payload.sub,
         role: payload.role,
       };
     } catch (error) {
+      console.error(error);
       throw new UnauthorizedException('Invalid or expired token');
     }
-    
+
     return true;
   }
 

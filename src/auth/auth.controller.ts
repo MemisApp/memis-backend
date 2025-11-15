@@ -1,6 +1,15 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request, Response } from 'express';
 import {
   ApiBody,
@@ -9,6 +18,7 @@ import {
   ApiTags,
   ApiOkResponse,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 
 @ApiTags('Auth')
@@ -115,5 +125,179 @@ export class AuthController {
       // refreshToken,
       sessionId,
     };
+  }
+
+  @Post('patient-login')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Patient login with pairing code' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pairingCode: { type: 'string', example: 'ABCD1234' },
+        deviceInfo: {
+          type: 'object',
+          properties: {
+            platform: { type: 'string', example: 'ios' },
+            deviceName: { type: 'string', example: 'iPhone 12' },
+            deviceId: { type: 'string', example: 'device-unique-id' },
+          },
+          required: ['platform', 'deviceName', 'deviceId'],
+        },
+      },
+      required: ['pairingCode', 'deviceInfo'],
+    },
+  })
+  @ApiOkResponse({
+    description: 'Patient login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        patient: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            birthDate: { type: 'string', format: 'date-time', nullable: true },
+            avatarUrl: { type: 'string', nullable: true },
+            shortIntro: { type: 'string', nullable: true },
+            maritalDate: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        accessToken: { type: 'string' },
+        refreshToken: { type: 'string' },
+        deviceId: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired pairing code' })
+  async patientLogin(
+    @Body()
+    body: {
+      pairingCode: string;
+      deviceInfo: { platform: string; deviceName: string; deviceId: string };
+    },
+  ) {
+    const { patient, accessToken, refreshToken, deviceId } =
+      await this.auth.patientLogin(body.pairingCode, body.deviceInfo);
+
+    return {
+      patient,
+      accessToken,
+      refreshToken,
+      deviceId,
+    };
+  }
+
+  @Post('device-login')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Device login (subsequent logins)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        deviceToken: { type: 'string', example: 'device-id' },
+        pinCode: { type: 'string', example: '1234' },
+      },
+      required: ['deviceToken'],
+    },
+  })
+  @ApiOkResponse({
+    description: 'Device login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        patient: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            birthDate: { type: 'string', format: 'date-time', nullable: true },
+            avatarUrl: { type: 'string', nullable: true },
+            shortIntro: { type: 'string', nullable: true },
+            maritalDate: {
+              type: 'string',
+              format: 'date-time',
+              nullable: true,
+            },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        accessToken: { type: 'string' },
+        refreshToken: { type: 'string' },
+        deviceId: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({
+    status: 401,
+    description: 'Device not found or not authorized',
+  })
+  async deviceLogin(@Body() body: { deviceToken: string; pinCode?: string }) {
+    const { patient, accessToken, refreshToken, deviceId } =
+      await this.auth.deviceLogin(body.deviceToken, body.pinCode);
+
+    return {
+      patient,
+      accessToken,
+      refreshToken,
+      deviceId,
+    };
+  }
+
+  @Post('logout')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Logout user (invalidate session)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to logout specific session. If not provided, logs out all sessions for the user.',
+          example: 'session-id-123',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Logout successful',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async logout(
+    @Body() body: { sessionId?: string },
+    @Req() req: Request & { user: { id: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const userId = req.user.id;
+    const result = await this.auth.logout(userId, body.sessionId);
+
+    // Clear the refresh token cookie
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/auth/refresh',
+    });
+
+    return result;
   }
 }

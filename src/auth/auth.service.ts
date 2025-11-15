@@ -9,6 +9,12 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 
+interface DeviceInfo {
+  platform: string;
+  deviceName: string;
+  deviceId: string;
+}
+
 const ACCESS_TTL = '15m';
 const REFRESH_TTL_DAYS = 30;
 
@@ -32,9 +38,7 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const exists = await this.prisma.user.findUnique({ where: { email } });
     if (exists)
-      throw new ConflictException(
-        'Vartotojas su tokiu el. paštu jau egzistuoja',
-      );
+      throw new ConflictException('User with this email already exists');
 
     const passwordHash = await this.hash(dto.password);
     const user = await this.prisma.user.create({
@@ -163,5 +167,168 @@ export class AuthService {
         expiresIn: Math.floor((+expiresAt - Date.now()) / 1000),
       },
     );
+  }
+
+  async patientLogin(pairingCode: string, deviceInfo: DeviceInfo) {
+    // Find valid pairing code
+    const pairing = await this.prisma.pairingCode.findFirst({
+      where: {
+        code: pairingCode.replace('-', ''), // Remove dash if provided
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            birthDate: true,
+            avatarUrl: true,
+            shortIntro: true,
+            maritalDate: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!pairing) {
+      throw new UnauthorizedException('Invalid or expired pairing code');
+    }
+
+    // Check if device already exists for this patient
+    let device = await this.prisma.device.findUnique({
+      where: {
+        patientId_devicePublicId: {
+          patientId: pairing.patientId,
+          devicePublicId: deviceInfo.deviceId,
+        },
+      },
+    });
+
+    if (!device) {
+      // Create new device
+      device = await this.prisma.device.create({
+        data: {
+          patientId: pairing.patientId,
+          platform: deviceInfo.platform,
+          devicePublicId: deviceInfo.deviceId,
+          deviceName: deviceInfo.deviceName,
+          isPrimary: false, // User can set primary later
+        },
+      });
+    }
+
+    // Mark pairing code as used
+    await this.prisma.pairingCode.update({
+      where: { id: pairing.id },
+      data: { usedAt: new Date() },
+    });
+
+    // Update device last seen
+    await this.prisma.device.update({
+      where: { id: device.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    // Generate tokens for patient
+    const accessToken = await this.signAccessToken(
+      pairing.patientId,
+      'PATIENT',
+    );
+    const refreshToken = await this.signPatientRefreshToken(
+      pairing.patientId,
+      device.id,
+    );
+
+    return {
+      patient: pairing.patient,
+      accessToken,
+      refreshToken,
+      deviceId: device.id,
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async deviceLogin(deviceToken: string, _pinCode?: string) {
+    // For now, we'll use deviceToken as deviceId (simplified)
+    // In production, you'd want to implement proper device tokens
+    // _pinCode is reserved for future PIN-based authentication
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceToken },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            birthDate: true,
+            avatarUrl: true,
+            shortIntro: true,
+            maritalDate: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!device) {
+      throw new UnauthorizedException('Device not found or not authorized');
+    }
+
+    // Update last seen
+    await this.prisma.device.update({
+      where: { id: device.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    // Generate tokens
+    const accessToken = await this.signAccessToken(device.patientId, 'PATIENT');
+    const refreshToken = await this.signPatientRefreshToken(
+      device.patientId,
+      device.id,
+    );
+
+    return {
+      patient: device.patient,
+      accessToken,
+      refreshToken,
+      deviceId: device.id,
+    };
+  }
+
+  private async signPatientRefreshToken(patientId: string, deviceId: string) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + REFRESH_TTL_DAYS);
+
+    return this.jwt.signAsync(
+      { sub: patientId, deviceId, type: 'patient_refresh' },
+      {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET')!,
+        expiresIn: Math.floor((+expiresAt - Date.now()) / 1000),
+      },
+    );
+  }
+
+  async logout(userId: string, sessionId?: string) {
+    if (sessionId) {
+      // Logout specific session
+      await this.prisma.userSession.deleteMany({
+        where: {
+          id: sessionId,
+          userId,
+        },
+      });
+    } else {
+      // Logout all sessions for the user
+      await this.prisma.userSession.deleteMany({
+        where: {
+          userId,
+        },
+      });
+    }
+
+    return { success: true };
   }
 }

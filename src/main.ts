@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -10,8 +10,18 @@ async function bootstrap() {
   });
   app.use(cookieParser());
 
+  // Enable global validation with security-focused options
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // Strip properties that don't have validation decorators
+      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are found
+      transform: true, // Automatically transform payloads to DTO instances
+      disableErrorMessages: false, // Keep error messages for development
+    }),
+  );
+
   // Redirect root URL to health endpoint
-  app.use('/', (req: Request, res: Response, next: () => void) => {
+  app.use('/', (req: any, res: any, next: () => void) => {
     if (req.path === '/') {
       res.redirect('/health');
     } else {
@@ -31,7 +41,6 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('swagger', app, document);
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(3000, '0.0.0.0');
 }
 void bootstrap();

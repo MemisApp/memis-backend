@@ -20,6 +20,15 @@ async function bootstrap() {
     }),
   );
 
+  // Redirect root URL to health endpoint
+  app.use('/', (req: any, res: any, next: () => void) => {
+    if (req.path === '/') {
+      res.redirect('/health');
+    } else {
+      next();
+    }
+  });
+
   const config = new DocumentBuilder()
     .setTitle('Memis API')
     .setDescription('API documentation')

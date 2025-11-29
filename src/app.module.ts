@@ -13,6 +13,7 @@ import { PairingCodesModule } from './modules/pairing-codes/pairing-codes.module
 import { DevicesModule } from './modules/devices/devices.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ContactsModule } from './modules/contacts/contacts.module';
     DevicesModule,
     RemindersModule,
     ContactsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

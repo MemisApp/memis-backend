@@ -42,7 +42,7 @@ export class CreatePatientDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(2000000)
   avatarUrl?: string;
 
   @ApiProperty({

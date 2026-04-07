@@ -13,6 +13,7 @@ model User {
   lastName     String
   email        String   @unique
   phone        String?
+  avatarUrl    String?
   passwordHash String
   role         Role     @default(CAREGIVER)
   createdAt    DateTime @default(now())
@@ -128,6 +129,8 @@ model Contact {
   name      String
   phone     String
   photoUrl  String?
+  description String?
+  isEmergencyContact Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

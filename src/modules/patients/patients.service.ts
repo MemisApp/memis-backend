@@ -13,33 +13,64 @@ export class PatientsService {
   constructor(private prisma: PrismaService) {}
 
   async create(caregiverId: string, dto: CreatePatientDto) {
-    // Create patient and automatically assign caregiver as OWNER
-    const patient = await this.prisma.patient.create({
-      data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-        avatarUrl: dto.avatarUrl,
-        shortIntro: dto.shortIntro,
-        maritalDate: dto.maritalDate ? new Date(dto.maritalDate) : null,
-        caregivers: {
-          create: {
-            caregiverId,
-            role: CaregiverRole.OWNER,
-          },
-        },
-      },
+    const caregiver = await this.prisma.user.findUnique({
+      where: { id: caregiverId },
       select: {
-        id: true,
         firstName: true,
         lastName: true,
-        birthDate: true,
+        phone: true,
+        email: true,
         avatarUrl: true,
-        shortIntro: true,
-        maritalDate: true,
-        createdAt: true,
-        updatedAt: true,
       },
+    });
+
+    if (!caregiver) {
+      throw new NotFoundException('Caregiver not found');
+    }
+
+    // Create patient, assign caregiver, and auto-create caregiver emergency contact.
+    const patient = await this.prisma.$transaction(async (tx) => {
+      const createdPatient = await tx.patient.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+          avatarUrl: dto.avatarUrl,
+          shortIntro: dto.shortIntro,
+          maritalDate: dto.maritalDate ? new Date(dto.maritalDate) : null,
+          caregivers: {
+            create: {
+              caregiverId,
+              role: CaregiverRole.OWNER,
+            },
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          birthDate: true,
+          avatarUrl: true,
+          shortIntro: true,
+          maritalDate: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await tx.contact.create({
+        data: {
+          patientId: createdPatient.id,
+          relation: 'OTHER',
+          name: `${caregiver.firstName} ${caregiver.lastName}`,
+          phone: caregiver.phone || 'Not provided',
+          photoUrl: caregiver.avatarUrl,
+          description: `Primary caregiver (${caregiver.email})`,
+          isEmergencyContact: true,
+        },
+      });
+
+      return createdPatient;
     });
 
     // Generate initial pairing code

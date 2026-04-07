@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Post,
+  Put,
   Req,
   Res,
   UseGuards,
@@ -12,14 +14,15 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request, Response } from 'express';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
   ApiOkResponse,
+  ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiTags,
 } from '@nestjs/swagger';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -288,7 +291,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const userId = req.user.id;
-    const result = await this.auth.logout(userId, body.sessionId);
+    const result = await this.auth.logout(userId, body?.sessionId);
 
     // Clear the refresh token cookie
     res.clearCookie('refresh_token', {
@@ -299,5 +302,27 @@ export class AuthController {
     });
 
     return result;
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get current caregiver profile' })
+  @ApiOkResponse({ description: 'Profile retrieved successfully' })
+  async getMe(@Req() req: Request & { user: { id: string } }) {
+    return this.auth.getMe(req.user.id);
+  }
+
+  @Put('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Update current caregiver profile' })
+  @ApiBody({ type: UpdateProfileDto })
+  @ApiOkResponse({ description: 'Profile updated successfully' })
+  async updateMe(
+    @Req() req: Request & { user: { id: string } },
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.auth.updateMe(req.user.id, dto);
   }
 }

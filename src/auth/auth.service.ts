@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 interface DeviceInfo {
   platform: string;
@@ -54,8 +55,11 @@ export class AuthService {
         email: true,
         firstName: true,
         lastName: true,
+        phone: true,
+        avatarUrl: true,
         role: true,
         createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -136,13 +140,56 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
         role: user.role,
         createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
       accessToken,
       refreshToken,
       sessionId: session.id,
     };
+  }
+
+  async getMe(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateMe(userId: string, dto: UpdateProfileDto) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.firstName !== undefined && { firstName: dto.firstName }),
+        ...(dto.lastName !== undefined && { lastName: dto.lastName }),
+        ...(dto.phone !== undefined && { phone: dto.phone || null }),
+        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl || null }),
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   private async signAccessToken(userId: string, role: string) {

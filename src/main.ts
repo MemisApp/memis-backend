@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { Request, Response } from 'express';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -14,6 +15,8 @@ async function bootstrap() {
       cors: { origin: true, credentials: true },
       logger: ['error', 'warn', 'log'],
     });
+    app.use(json({ limit: '2mb' }));
+    app.use(urlencoded({ limit: '2mb', extended: true }));
     app.use(cookieParser());
 
     // Enable global validation with security-focused options

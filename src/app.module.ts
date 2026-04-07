@@ -14,6 +14,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AdminModule } from './modules/admin/admin.module';
     RemindersModule,
     ContactsModule,
     AdminModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

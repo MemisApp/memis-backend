@@ -9,5 +9,6 @@ import { AuthService } from './auth.service';
   imports: [PrismaModule, ConfigModule, JwtModule.register({})],
   controllers: [AuthController],
   providers: [AuthService],
+  exports: [JwtModule],
 })
 export class AuthModule {}

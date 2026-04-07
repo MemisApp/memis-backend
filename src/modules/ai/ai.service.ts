@@ -39,6 +39,20 @@ export class AiService {
     if (role === 'PATIENT') return userId;
     if (!requestedPatientId) return null;
 
+    // Doctors access their assigned patients
+    if (role === 'DOCTOR' || role === 'ADMIN') {
+      const doctorLink = await this.prisma.doctorPatient.findUnique({
+        where: {
+          doctorId_patientId: {
+            doctorId: userId,
+            patientId: requestedPatientId,
+          },
+        },
+      });
+      if (doctorLink) return requestedPatientId;
+    }
+
+    // Caregivers access their linked patients
     const link = await this.prisma.patientCaregiver.findUnique({
       where: {
         patientId_caregiverId: {
@@ -51,6 +65,62 @@ export class AiService {
       throw new ForbiddenException('No access to selected patient context');
     }
     return requestedPatientId;
+  }
+
+  private async getPatientClinicalSummary(patientId: string): Promise<string> {
+    const [anamneze, mmseTests, treatments] = await Promise.all([
+      this.prisma.anamneze.findMany({
+        where: { patientId },
+        orderBy: { updatedAt: 'desc' },
+        take: 3,
+        select: { content: true, updatedAt: true },
+      }),
+      this.prisma.mMSETest.findMany({
+        where: { patientId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { score: true, createdAt: true },
+      }),
+      this.prisma.treatment.findMany({
+        where: { patientId },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: { description: true, createdAt: true },
+      }),
+    ]);
+
+    const lines: string[] = [];
+
+    if (anamneze.length > 0) {
+      lines.push('--- Disease History (Anamneze) ---');
+      for (const entry of anamneze) {
+        lines.push(
+          `[${new Date(entry.updatedAt).toLocaleDateString()}] ${entry.content}`,
+        );
+      }
+    }
+
+    if (mmseTests.length > 0) {
+      lines.push('--- MMSE Scores (most recent first) ---');
+      for (const test of mmseTests) {
+        lines.push(
+          `[${new Date(test.createdAt).toLocaleDateString()}] Score: ${test.score}/30`,
+        );
+      }
+    }
+
+    if (treatments.length > 0) {
+      lines.push('--- Active Treatments ---');
+      for (const treatment of treatments) {
+        lines.push(
+          `[${new Date(treatment.createdAt).toLocaleDateString()}] ${treatment.description}`,
+        );
+      }
+    }
+
+    return lines.length > 0
+      ? lines.join('\n')
+      : 'No clinical data recorded yet.';
   }
 
   private async getMatchedContacts(
@@ -117,6 +187,7 @@ export class AiService {
 
   private buildSystemInstruction(context: {
     contacts: AiContactSnippet[];
+    clinicalSummary?: string | null;
   }): string {
     const contactsSummary =
       context.contacts.length > 0
@@ -130,7 +201,7 @@ export class AiService {
             .join('\n')
         : 'No contact context matched for this prompt.';
 
-    return [
+    const lines = [
       'You are MemiMinds, a clever and playful Alzheimer/dementia support assistant.',
       'Provide medically careful, evidence-based general education only.',
       'Do not diagnose, and do not replace clinician advice.',
@@ -140,7 +211,20 @@ export class AiService {
       'When contact context exists, include a brief "Contact snapshot" section using those facts.',
       'Contact context:',
       contactsSummary,
-    ].join('\n');
+    ];
+
+    if (context.clinicalSummary) {
+      lines.push(
+        '',
+        '--- Patient Clinical Context (use this to answer caregiver/doctor questions about the patient) ---',
+        context.clinicalSummary,
+        '--- End of Clinical Context ---',
+        "When answering questions about the patient's history, illness, or test results, draw from the clinical context above.",
+        'Always present clinical findings objectively and recommend professional evaluation for interpretation.',
+      );
+    }
+
+    return lines.join('\n');
   }
 
   async createStreamContext(
@@ -168,15 +252,19 @@ export class AiService {
     const lastUser = [...dto.messages]
       .reverse()
       .find((m) => m.role === 'user')?.content;
-    const matchedContacts = await this.getMatchedContacts(
-      patientId,
-      lastUser || '',
-    );
+
+    const [matchedContacts, clinicalSummary] = await Promise.all([
+      this.getMatchedContacts(patientId, lastUser || ''),
+      patientId
+        ? this.getPatientClinicalSummary(patientId)
+        : Promise.resolve(null),
+    ]);
 
     return {
       geminiApiKey,
       systemInstruction: this.buildSystemInstruction({
         contacts: matchedContacts,
+        clinicalSummary,
       }),
       messages: dto.messages,
       matchedContacts,

@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { Role, Workplace } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -16,7 +17,7 @@ interface DeviceInfo {
   deviceId: string;
 }
 
-const ACCESS_TTL = '15m';
+const DEFAULT_ACCESS_TTL = '365d';
 const REFRESH_TTL_DAYS = 30;
 
 @Injectable()
@@ -48,7 +49,11 @@ export class AuthService {
         passwordHash,
         firstName: dto.firstName,
         lastName: dto.lastName,
-        role: 'CAREGIVER',
+        role: dto.role as Role,
+        workplace: dto.role === 'DOCTOR' ? (dto.workplace as Workplace) : null,
+        profession: dto.role === 'DOCTOR' ? dto.profession : null,
+        title: dto.role === 'DOCTOR' ? dto.title : null,
+        avatarUrl: dto.avatarUrl || null,
       },
       select: {
         id: true,
@@ -57,6 +62,9 @@ export class AuthService {
         lastName: true,
         phone: true,
         avatarUrl: true,
+        workplace: true,
+        profession: true,
+        title: true,
         role: true,
         createdAt: true,
         updatedAt: true,
@@ -142,6 +150,9 @@ export class AuthService {
         lastName: user.lastName,
         phone: user.phone,
         avatarUrl: user.avatarUrl,
+        workplace: user.workplace,
+        profession: user.profession,
+        title: user.title,
         role: user.role,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -162,6 +173,9 @@ export class AuthService {
         lastName: true,
         phone: true,
         avatarUrl: true,
+        workplace: true,
+        profession: true,
+        title: true,
         role: true,
         createdAt: true,
         updatedAt: true,
@@ -177,6 +191,9 @@ export class AuthService {
         ...(dto.lastName !== undefined && { lastName: dto.lastName }),
         ...(dto.phone !== undefined && { phone: dto.phone || null }),
         ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl || null }),
+        ...(dto.workplace !== undefined && { workplace: dto.workplace || null }),
+        ...(dto.profession !== undefined && { profession: dto.profession || null }),
+        ...(dto.title !== undefined && { title: dto.title || null }),
       },
       select: {
         id: true,
@@ -185,6 +202,9 @@ export class AuthService {
         lastName: true,
         phone: true,
         avatarUrl: true,
+        workplace: true,
+        profession: true,
+        title: true,
         role: true,
         createdAt: true,
         updatedAt: true,
@@ -193,11 +213,13 @@ export class AuthService {
   }
 
   private async signAccessToken(userId: string, role: string) {
+    const accessTtl =
+      this.config.get<string>('JWT_ACCESS_TTL') || DEFAULT_ACCESS_TTL;
     return this.jwt.signAsync(
       { sub: userId, role, type: 'access' },
       {
         secret: this.config.get<string>('JWT_ACCESS_SECRET')!,
-        expiresIn: ACCESS_TTL,
+        expiresIn: accessTtl,
       },
     );
   }

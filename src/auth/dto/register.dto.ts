@@ -5,8 +5,11 @@ import {
   MaxLength,
   Matches,
   IsString,
+  IsIn,
+  ValidateIf,
+  IsOptional,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 export class RegisterDto {
@@ -47,4 +50,43 @@ export class RegisterDto {
   })
   @Transform(({ value }) => (value as string)?.trim())
   lastName!: string;
+
+  @ApiProperty({
+    enum: ['CAREGIVER', 'DOCTOR'],
+    example: 'CAREGIVER',
+  })
+  @IsString()
+  @IsIn(['CAREGIVER', 'DOCTOR'])
+  role!: 'CAREGIVER' | 'DOCTOR';
+
+  @ApiPropertyOptional({
+    example: 'data:image/jpeg;base64,...',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000000)
+  avatarUrl?: string;
+
+  @ApiProperty({
+    enum: ['LSMUKK', 'KLAIPEDOS_LIGONINE', 'VU_LIGONINE'],
+    required: false,
+  })
+  @ValidateIf((o: RegisterDto) => o.role === 'DOCTOR')
+  @IsString()
+  @IsIn(['LSMUKK', 'KLAIPEDOS_LIGONINE', 'VU_LIGONINE'])
+  workplace?: 'LSMUKK' | 'KLAIPEDOS_LIGONINE' | 'VU_LIGONINE';
+
+  @ApiProperty({ example: 'Neurologist', required: false })
+  @ValidateIf((o: RegisterDto) => o.role === 'DOCTOR')
+  @IsString()
+  @IsNotEmpty({ message: 'Profession is required for doctors' })
+  @MaxLength(120)
+  profession?: string;
+
+  @ApiProperty({ example: 'MD, PhD', required: false })
+  @ValidateIf((o: RegisterDto) => o.role === 'DOCTOR')
+  @IsString()
+  @IsNotEmpty({ message: 'Title is required for doctors' })
+  @MaxLength(120)
+  title?: string;
 }

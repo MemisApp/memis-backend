@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'Jane' })
@@ -38,4 +38,24 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(2000000)
   avatarUrl?: string;
+
+  @ApiPropertyOptional({
+    enum: ['LSMUKK', 'KLAIPEDOS_LIGONINE', 'VU_LIGONINE'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['LSMUKK', 'KLAIPEDOS_LIGONINE', 'VU_LIGONINE'])
+  workplace?: 'LSMUKK' | 'KLAIPEDOS_LIGONINE' | 'VU_LIGONINE';
+
+  @ApiPropertyOptional({ example: 'Neurologist' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  profession?: string;
+
+  @ApiPropertyOptional({ example: 'MD, PhD' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  title?: string;
 }

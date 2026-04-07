@@ -58,6 +58,7 @@ export class AiService {
     userText: string,
   ): Promise<AiContactSnippet[]> {
     if (!patientId) return [];
+    if (!userText.trim()) return [];
 
     const contacts = await this.prisma.contact.findMany({
       where: { patientId },
@@ -72,15 +73,42 @@ export class AiService {
     });
 
     const normalizedQuery = userText.toLowerCase();
-    const matches = contacts.filter((contact) =>
-      normalizedQuery.includes(contact.name.toLowerCase()),
-    );
+    const escapeRegExp = (value: string) =>
+      value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-    const target = matches.length > 0 ? matches : contacts.slice(0, 1);
-    return target.slice(0, 4).map((c) => ({
+    const hasExplicitContactIntent =
+      /\b(my|our)\s+(contact|relative|family|caregiver)\b/i.test(normalizedQuery) ||
+      /\b(emergency contact|who is my|call my|show my contact)\b/i.test(
+        normalizedQuery,
+      );
+
+    const matches = contacts.filter((contact) => {
+      const fullName = contact.name.toLowerCase().trim();
+      if (!fullName) return false;
+
+      // Strong match: full name appears as phrase.
+      const fullNameRegex = new RegExp(`\\b${escapeRegExp(fullName)}\\b`, 'i');
+      if (fullNameRegex.test(normalizedQuery)) return true;
+
+      // Fallback: all meaningful name tokens appear as whole words.
+      const tokens = fullName.split(/\s+/).filter((t) => t.length >= 4);
+      if (tokens.length < 2) return false;
+      return tokens.every((token) =>
+        new RegExp(`\\b${escapeRegExp(token)}\\b`, 'i').test(normalizedQuery),
+      );
+    });
+
+    if (matches.length === 0 && !hasExplicitContactIntent) {
+      return [];
+    }
+
+    const selectedContacts =
+      matches.length > 0 ? matches.slice(0, 4) : contacts.slice(0, 1);
+
+    return selectedContacts.map((c) => ({
       id: c.id,
       name: c.name,
-      description: c.description,
+      description: c.description || 'No description available',
       photoUrl: c.photoUrl,
       phone: c.phone,
       birthday: null, // Contact birthday is not yet modeled.

@@ -14,6 +14,9 @@ model User {
   email        String   @unique
   phone        String?
   avatarUrl    String?
+  workplace    Workplace?
+  profession   String?
+  title        String?
   passwordHash String
   role         Role     @default(CAREGIVER)
   createdAt    DateTime @default(now())
@@ -25,6 +28,12 @@ model User {
   roomMembers  RoomMember[]
   createdThreads Thread[]
   authoredMessages Message[]
+  doctorPatients        DoctorPatient[]
+  anamnezeEntries       Anamneze[]
+  assignedTreatments    Treatment[]
+  doctorNotes           DoctorNote[]
+  notifications         AppNotification[]
+  sentNotifications     AppNotification[] @relation("NotificationActor")
 }
 
 model UserSession {
@@ -58,6 +67,13 @@ model Patient {
   contacts    Contact[]
   devices     Device[]
   PairingCode PairingCode[]
+  doctorAssignments DoctorPatient[]
+  anamnezeEntries   Anamneze[]
+  clockTests        ClockTest[]
+  mmseTests         MMSETest[]
+  treatments        Treatment[]
+  doctorNotes       DoctorNote[]
+  notifications     AppNotification[]
 }
 
 model PatientCaregiver {
@@ -142,7 +158,14 @@ model Contact {
 enum Role {
   CAREGIVER
   PATIENT
+  DOCTOR
   ADMIN
+}
+
+enum Workplace {
+  LSMUKK
+  KLAIPEDOS_LIGONINE
+  VU_LIGONINE
 }
 
 enum CaregiverRole {
@@ -258,4 +281,115 @@ enum AiOwnerRole {
 enum AiMessageRole {
   USER
   ASSISTANT
+}
+
+enum DoctorPatientStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model DoctorPatient {
+  id         String              @id @default(cuid())
+  doctorId   String
+  patientId  String
+  status     DoctorPatientStatus @default(ACTIVE)
+  assignedAt DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  doctor User    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, patientId])
+  @@index([doctorId, status])
+  @@index([patientId])
+}
+
+model Anamneze {
+  id        String   @id @default(cuid())
+  patientId String
+  doctorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  User    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, updatedAt])
+  @@index([doctorId])
+}
+
+model ClockTest {
+  id        String   @id @default(cuid())
+  patientId String
+  imageUrl  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+}
+
+model MMSETest {
+  id                String   @id @default(cuid())
+  patientId         String
+  score             Int
+  answers           Json
+  assignedByDoctor  String?
+  createdAt         DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+  @@index([assignedByDoctor])
+}
+
+model Treatment {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String
+  description String
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  User    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+  @@index([doctorId])
+}
+
+model DoctorNote {
+  id        String   @id @default(cuid())
+  patientId String
+  doctorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  User    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, updatedAt])
+  @@index([doctorId])
+}
+
+model AppNotification {
+  id        String   @id @default(cuid())
+  userId    String?
+  patientId String?
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  actorId   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt])
+  @@index([patientId])
 }

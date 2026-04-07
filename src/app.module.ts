@@ -15,6 +15,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AiModule } from './modules/ai/ai.module';
+import { ClinicalModule } from './modules/clinical/clinical.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AiModule } from './modules/ai/ai.module';
     ContactsModule,
     AdminModule,
     AiModule,
+    ClinicalModule,
   ],
   controllers: [AppController],
   providers: [AppService],

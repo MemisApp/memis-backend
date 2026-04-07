@@ -22,6 +22,8 @@ import { CreateMmseTestDto } from './dto/create-mmse-test.dto';
 import { CreateTreatmentDto } from './dto/create-treatment.dto';
 import { CreateDoctorNoteDto } from './dto/create-doctor-note.dto';
 import { CreateAiRecommendationDto } from './dto/create-ai-recommendation.dto';
+import { RateClockTestDto } from './dto/rate-clock-test.dto';
+import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 
 type AuthenticatedRequest = Request & {
   user: { id: string; role: string };
@@ -192,6 +194,23 @@ export class ClinicalController {
     return this.clinicalService.getClockGallery(req.user.id, req.user.role, patientId);
   }
 
+  @Patch('/doctor/patients/:patientId/tests/clock/:clockTestId/rating')
+  @ApiOperation({ summary: 'Rate a clock drawing test' })
+  rateClockTest(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+    @Param('clockTestId') clockTestId: string,
+    @Body() dto: RateClockTestDto,
+  ) {
+    return this.clinicalService.rateClockTest(
+      req.user.id,
+      req.user.role,
+      patientId,
+      clockTestId,
+      dto,
+    );
+  }
+
   @Post('/patient/tests/clock')
   @ApiOperation({ summary: 'Patient submits clock drawing test' })
   submitClockTest(@Req() req: AuthenticatedRequest, @Body() dto: CreateClockTestDto) {
@@ -309,5 +328,14 @@ export class ClinicalController {
       req.user.role,
       notificationId,
     );
+  }
+
+  @Post('/patient/push-token')
+  @ApiOperation({ summary: 'Register Expo push token for the authenticated patient device' })
+  registerPushToken(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: RegisterPushTokenDto,
+  ) {
+    return this.clinicalService.registerPushToken(req.user.id, dto.devicePublicId, dto.token);
   }
 }

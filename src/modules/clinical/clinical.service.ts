@@ -16,6 +16,8 @@ import { CreateMmseTestDto } from './dto/create-mmse-test.dto';
 import { CreateTreatmentDto } from './dto/create-treatment.dto';
 import { CreateDoctorNoteDto } from './dto/create-doctor-note.dto';
 import { CreateAiRecommendationDto } from './dto/create-ai-recommendation.dto';
+import { RateClockTestDto } from './dto/rate-clock-test.dto';
+import { PushService } from './push.service';
 
 @Injectable()
 export class ClinicalService {
@@ -24,6 +26,7 @@ export class ClinicalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly pushService: PushService,
   ) {}
 
   private ensureDoctor(role: string) {
@@ -80,6 +83,20 @@ export class ClinicalService {
         metadata: input.metadata as Prisma.InputJsonValue | undefined,
       },
     });
+
+    // Fire a real push notification to every registered device for this patient.
+    if (input.patientId) {
+      this.pushService
+        .sendToPatient(input.patientId, input.title, input.body, {
+          type: input.type,
+          ...(input.metadata ?? {}),
+        })
+        .catch((err) => this.logger.error('Push notification failed', err));
+    }
+  }
+
+  async registerPushToken(patientId: string, devicePublicId: string, token: string) {
+    await this.pushService.registerToken(patientId, devicePublicId, token);
   }
 
   async searchPatients(query: string) {
@@ -604,6 +621,50 @@ export class ClinicalService {
     });
   }
 
+  async rateClockTest(
+    doctorId: string,
+    role: string,
+    patientId: string,
+    clockTestId: string,
+    dto: RateClockTestDto,
+  ) {
+    this.ensureDoctor(role);
+    await this.ensureDoctorPatientAccess(doctorId, patientId);
+
+    const clock = await this.prisma.clockTest.findUnique({ where: { id: clockTestId } });
+    if (!clock || clock.patientId !== patientId) {
+      throw new NotFoundException('Clock test not found');
+    }
+
+    const currentMetadata =
+      clock.metadata && typeof clock.metadata === 'object'
+        ? (clock.metadata as Record<string, unknown>)
+        : {};
+    const nextMetadata: Record<string, unknown> = {
+      ...currentMetadata,
+      rating: dto.rating,
+      ratingNote: dto.note || null,
+      ratedAt: new Date().toISOString(),
+      ratedByDoctorId: doctorId,
+    };
+
+    const updated = await this.prisma.clockTest.update({
+      where: { id: clockTestId },
+      data: { metadata: nextMetadata as Prisma.InputJsonValue },
+    });
+
+    await this.createNotification({
+      patientId,
+      type: 'CLOCK_TEST_RATED',
+      title: 'Clock test reviewed',
+      body: `Your doctor reviewed your clock drawing test (rating ${dto.rating}/5).`,
+      actorId: doctorId,
+      metadata: { clockTestId: updated.id, rating: dto.rating },
+    });
+
+    return updated;
+  }
+
   async getTimeline(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
     await this.ensureDoctorPatientAccess(doctorId, patientId);
@@ -697,7 +758,8 @@ export class ClinicalService {
       `- Anamneze: ${anamneze.map((a) => a.content).join(' | ') || 'n/a'}`,
       `- MMSE recent: ${mmse.map((m) => `${m.score} (${m.createdAt.toISOString()})`).join(' | ') || 'n/a'}`,
       `- Clock metadata: ${JSON.stringify(clock)}`,
-      'Return a concise, editable treatment plan draft in markdown.',
+      'Return a concise, editable treatment plan draft as plain text only.',
+      'Do not use markdown, bullet symbols, numbered lists, headings, or separators.',
     ].join('\n');
 
     const response = await fetch(
@@ -718,8 +780,18 @@ export class ClinicalService {
         ?.map((p: { text?: string }) => p.text || '')
         .join('') || 'No recommendation generated.';
 
+    const plainText = aiText
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/^\s*[-*]\s+/gm, '')
+      .replace(/^\s*\d+\.\s+/gm, '')
+      .replace(/^\s*[-_]{3,}\s*$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
     return {
-      recommendation: `${aiText}\n\nConsult a neurologist or qualified doctor before applying any treatment.`,
+      recommendation: `${plainText}\n\nConsult a neurologist or qualified doctor before applying any treatment.`,
     };
   }
 }

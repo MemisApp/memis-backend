@@ -109,6 +109,7 @@ model Device {
   deviceName       String?
   refreshTokenHash String?
   isPrimary        Boolean   @default(false)
+  expoPushToken    String?
   lastSeenAt       DateTime?
   createdAt        DateTime  @default(now())
 

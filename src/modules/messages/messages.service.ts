@@ -3,15 +3,22 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PushService } from '../clinical/push.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { Role } from '@prisma/client';
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(MessagesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private pushService: PushService,
+  ) {}
 
   async listByThread(
     userId: string,
@@ -41,13 +48,24 @@ export class MessagesService {
     const [items, total] = await Promise.all([
       this.prisma.message.findMany({
         where: { threadId },
-        select: {
-          id: true,
-          content: true,
-          threadId: true,
-          authorId: true,
-          editedAt: true,
-          createdAt: true,
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              role: true,
+            },
+          },
+          patientAuthor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
         },
         orderBy: { createdAt: 'asc' },
         skip,
@@ -94,21 +112,69 @@ export class MessagesService {
       throw new BadRequestException('EMPTY_CONTENT');
     }
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         threadId,
         authorId: userId,
         content: trimmedContent,
       },
-      select: {
-        id: true,
-        content: true,
-        threadId: true,
-        authorId: true,
-        editedAt: true,
-        createdAt: true,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+            role: true,
+          },
+        },
       },
     });
+
+    // If this room is linked to a patient, push-notify them
+    this.notifyPatientIfLinked(
+      thread.roomId,
+      message.author,
+      trimmedContent,
+    ).catch((err) => this.logger.error('Patient push failed', err));
+
+    return message;
+  }
+
+  /** Fire Expo push to the patient linked to the room (if any). */
+  private async notifyPatientIfLinked(
+    roomId: string,
+    sender: { firstName: string; lastName: string } | null,
+    content: string,
+  ) {
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      select: { patientId: true, name: true },
+    });
+    if (!room?.patientId) return;
+
+    const senderName = sender
+      ? `${sender.firstName} ${sender.lastName}`
+      : 'Care Team';
+    const preview =
+      content.length > 100 ? `${content.slice(0, 100)}…` : content;
+
+    await this.prisma.appNotification.create({
+      data: {
+        patientId: room.patientId,
+        title: `${senderName} sent a message`,
+        body: preview,
+        type: 'CHAT_MESSAGE',
+        metadata: { roomId },
+      },
+    });
+
+    await this.pushService.sendToPatient(
+      room.patientId,
+      `${senderName} sent a message`,
+      preview,
+      { type: 'CHAT_MESSAGE', roomId },
+    );
   }
 
   async getById(userId: string, messageId: string) {

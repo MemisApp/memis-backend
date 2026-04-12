@@ -248,7 +248,7 @@ export class ClinicalService {
       where: { id: anamnezeId },
     });
     if (!entry || entry.patientId !== patientId || entry.doctorId !== doctorId) {
-      throw new NotFoundException('Anamneze entry not found');
+      throw new NotFoundException('Anamnesis entry not found');
     }
 
     return this.prisma.anamneze.update({
@@ -792,6 +792,249 @@ export class ClinicalService {
 
     return {
       recommendation: `${plainText}\n\nConsult a neurologist or qualified doctor before applying any treatment.`,
+    };
+  }
+
+  // ─── Patient Chat ────────────────────────────────────────────────────────
+
+  /** List all rooms linked to this patient (created for their care team). */
+  async getPatientRooms(patientId: string) {
+    const rooms = await this.prisma.room.findMany({
+      where: { patientId },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+            },
+          },
+        },
+        threads: {
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          include: {
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              include: {
+                author: { select: { firstName: true, lastName: true } },
+                patientAuthor: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return rooms;
+  }
+
+  /** List threads in a patient-linked room. */
+  async getPatientRoomThreads(patientId: string, roomId: string) {
+    const room = await this.prisma.room.findFirst({ where: { id: roomId, patientId } });
+    if (!room) throw new ForbiddenException('Room not accessible for this patient');
+
+    return this.prisma.thread.findMany({
+      where: { roomId },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            author: { select: { firstName: true, lastName: true } },
+            patientAuthor: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /** Get paginated messages in a thread (must belong to a patient room). */
+  async getPatientThreadMessages(patientId: string, threadId: string, page = 1, pageSize = 50) {
+    const thread = await this.prisma.thread.findFirst({
+      where: { id: threadId, room: { patientId } },
+    });
+    if (!thread) throw new ForbiddenException('Thread not accessible for this patient');
+
+    const skip = (page - 1) * pageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.message.findMany({
+        where: { threadId },
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take: pageSize,
+        include: {
+          author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } },
+          patientAuthor: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        },
+      }),
+      this.prisma.message.count({ where: { threadId } }),
+    ]);
+
+    return { items, page, pageSize, total };
+  }
+
+  /** Patient sends a message; notifies User members via AppNotification (no Expo for them). */
+  async sendPatientMessage(patientId: string, threadId: string, content: string) {
+    const trimmed = content.trim();
+    if (!trimmed) throw new BadRequestException('EMPTY_CONTENT');
+
+    const thread = await this.prisma.thread.findFirst({
+      where: { id: threadId, room: { patientId } },
+      include: {
+        room: {
+          include: {
+            members: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!thread) throw new ForbiddenException('Thread not accessible for this patient');
+
+    const message = await this.prisma.message.create({
+      data: { threadId, patientAuthorId: patientId, content: trimmed },
+      include: {
+        patientAuthor: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+    });
+
+    // Touch thread + room updatedAt so ordering works
+    await Promise.all([
+      this.prisma.thread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
+      this.prisma.room.update({ where: { id: thread.room.id }, data: { updatedAt: new Date() } }),
+    ]);
+
+    // Notify User members (doctor, caregiver) via in-app notification
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true },
+    });
+    const senderName = patient ? `${patient.firstName} ${patient.lastName}` : 'Patient';
+
+    for (const member of thread.room.members) {
+      await this.createNotification({
+        userId: member.userId,
+        title: `New message from ${senderName}`,
+        body: trimmed.length > 100 ? `${trimmed.slice(0, 100)}…` : trimmed,
+        type: 'CHAT_MESSAGE',
+        metadata: { threadId, roomId: thread.room.id },
+      });
+    }
+
+    return message;
+  }
+
+  /**
+   * Find or create a dedicated doctor-patient room + thread.
+   * Returns the roomId and threadId to navigate to.
+   */
+  async getOrCreateDoctorThread(patientId: string) {
+    const assignment = await this.prisma.doctorPatient.findFirst({
+      where: { patientId, status: DoctorPatientStatus.ACTIVE },
+      include: {
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+    if (!assignment) throw new NotFoundException('No active doctor assigned to this patient');
+
+    const doctorId = assignment.doctor.id;
+
+    // Check if a room already exists that is linked to this patient and has this doctor as member
+    const existingRoom = await this.prisma.room.findFirst({
+      where: {
+        patientId,
+        members: { some: { userId: doctorId } },
+      },
+      include: { threads: { orderBy: { createdAt: 'asc' }, take: 1 } },
+    });
+
+    if (existingRoom) {
+      const thread = existingRoom.threads[0];
+      if (thread) return { roomId: existingRoom.id, threadId: thread.id };
+
+      // Room exists but no thread — create one
+      const newThread = await this.prisma.thread.create({
+        data: { roomId: existingRoom.id, title: 'Chat', createdById: doctorId },
+      });
+      return { roomId: existingRoom.id, threadId: newThread.id };
+    }
+
+    // Create fresh room + thread
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true },
+    });
+    const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Patient';
+
+    const room = await this.prisma.room.create({
+      data: {
+        name: `${patientName} — Dr. ${assignment.doctor.lastName}`,
+        visibility: 'PRIVATE',
+        createdById: doctorId,
+        patientId,
+        members: { create: { userId: doctorId, role: 'OWNER' } },
+      },
+    });
+
+    const thread = await this.prisma.thread.create({
+      data: { roomId: room.id, title: 'Chat', createdById: doctorId },
+    });
+
+    return { roomId: room.id, threadId: thread.id };
+  }
+
+  /**
+   * Doctor: find the room+thread shared with a specific patient, or null if none exists yet.
+   * Unlike getOrCreateDoctorThread (patient-side), this is read-only — it doesn't create.
+   */
+  async getDoctorPatientChatRoom(doctorId: string, role: string, patientId: string) {
+    this.ensureDoctor(role);
+    const room = await this.prisma.room.findFirst({
+      where: {
+        patientId,
+        members: { some: { userId: doctorId } },
+      },
+      include: {
+        threads: { orderBy: { createdAt: 'asc' }, take: 1 },
+      },
+    });
+    if (!room || !room.threads[0]) return null;
+    return { roomId: room.id, threadId: room.threads[0].id };
+  }
+
+  /** Returns the active assigned doctor for a patient, or null if none. */
+  async getMyDoctor(patientId: string) {
+    const assignment = await this.prisma.doctorPatient.findFirst({
+      where: {
+        patientId,
+        status: DoctorPatientStatus.ACTIVE,
+      },
+      orderBy: { assignedAt: 'desc' },
+      select: {
+        assignedAt: true,
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            avatarUrl: true,
+            profession: true,
+            title: true,
+            workplace: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) return null;
+
+    return {
+      assignedAt: assignment.assignedAt,
+      ...assignment.doctor,
     };
   }
 }

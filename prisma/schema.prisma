@@ -74,6 +74,8 @@ model Patient {
   treatments        Treatment[]
   doctorNotes       DoctorNote[]
   notifications     AppNotification[]
+  careRooms         Room[]    @relation("PatientRooms")
+  patientMessages   Message[] @relation("PatientMessages")
 }
 
 model PatientCaregiver {
@@ -191,14 +193,17 @@ model Room {
   name         String
   visibility   RoomVisibility  @default(PRIVATE)
   createdById  String
+  patientId    String?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
   createdBy    User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  patient      Patient?        @relation("PatientRooms", fields: [patientId], references: [id], onDelete: SetNull)
   members      RoomMember[]
   threads      Thread[]
 
   @@index([createdById])
+  @@index([patientId])
 }
 
 model RoomMember {
@@ -231,18 +236,21 @@ model Thread {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  threadId  String
-  authorId  String
-  content   String
-  editedAt  DateTime?
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  threadId        String
+  authorId        String?
+  patientAuthorId String?
+  content         String
+  editedAt        DateTime?
+  createdAt       DateTime @default(now())
 
-  thread    Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author    User   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  thread        Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author        User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  patientAuthor Patient? @relation("PatientMessages", fields: [patientAuthorId], references: [id], onDelete: SetNull)
 
   @@index([threadId])
   @@index([authorId])
+  @@index([patientAuthorId])
 }
 
 model AiConversation {

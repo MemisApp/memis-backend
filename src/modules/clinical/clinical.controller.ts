@@ -229,6 +229,70 @@ export class ClinicalController {
     return this.clinicalService.getPendingTestsForPatient(req.user.id);
   }
 
+  @Get('/doctor/patients/:patientId/chat-room')
+  @ApiOperation({ summary: 'Get the doctor-patient shared chat room and thread (read-only, no creation)' })
+  getDoctorPatientChatRoom(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getDoctorPatientChatRoom(req.user.id, req.user.role, patientId);
+  }
+
+  @Get('/patient/my-doctor')
+  @ApiOperation({ summary: 'Get the active doctor assigned to the patient' })
+  getMyDoctor(@Req() req: AuthenticatedRequest) {
+    return this.clinicalService.getMyDoctor(req.user.id);
+  }
+
+  // ─── Patient Chat ────────────────────────────────────────────────────────
+
+  @Get('/patient/rooms')
+  @ApiOperation({ summary: 'List care rooms linked to the patient' })
+  getPatientRooms(@Req() req: AuthenticatedRequest) {
+    return this.clinicalService.getPatientRooms(req.user.id);
+  }
+
+  @Get('/patient/rooms/:roomId/threads')
+  @ApiOperation({ summary: 'List threads in a patient-linked room' })
+  getPatientRoomThreads(
+    @Req() req: AuthenticatedRequest,
+    @Param('roomId') roomId: string,
+  ) {
+    return this.clinicalService.getPatientRoomThreads(req.user.id, roomId);
+  }
+
+  @Get('/patient/threads/:threadId/messages')
+  @ApiOperation({ summary: 'Get messages in a thread for a patient' })
+  getPatientThreadMessages(
+    @Req() req: AuthenticatedRequest,
+    @Param('threadId') threadId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.clinicalService.getPatientThreadMessages(
+      req.user.id,
+      threadId,
+      page ? parseInt(page, 10) : 1,
+      pageSize ? parseInt(pageSize, 10) : 50,
+    );
+  }
+
+  @Post('/patient/threads/:threadId/messages')
+  @ApiOperation({ summary: 'Patient sends a message in a thread' })
+  sendPatientMessage(
+    @Req() req: AuthenticatedRequest,
+    @Param('threadId') threadId: string,
+    @Body() body: { content: string },
+  ) {
+    return this.clinicalService.sendPatientMessage(req.user.id, threadId, body.content);
+  }
+
+  @Post('/patient/doctor-thread')
+  @ApiOperation({ summary: 'Get or create a direct room+thread with the assigned doctor' })
+  getOrCreateDoctorThread(@Req() req: AuthenticatedRequest) {
+    return this.clinicalService.getOrCreateDoctorThread(req.user.id);
+  }
+
   @Post('/doctor/patients/:patientId/treatments')
   @ApiOperation({ summary: 'Assign treatment to patient' })
   createTreatment(

@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
-import { Role } from '@prisma/client';
+import { Role, RoomVisibility } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -20,12 +20,23 @@ export class AdminService {
 
   // ==================== USER MANAGEMENT ====================
 
-  async findAllUsers(page: number = 1, pageSize: number = 20) {
+  async findAllUsers(page: number = 1, pageSize: number = 20, search?: string) {
     const skip = (page - 1) * pageSize;
-    const pageSizeNum = Math.min(Math.max(1, pageSize), 100); // Clamp between 1-100
+    const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+
+    const where = search
+      ? {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' as const } },
+            { lastName: { contains: search, mode: 'insensitive' as const } },
+            { email: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
+        where,
         select: {
           id: true,
           firstName: true,
@@ -42,7 +53,7 @@ export class AdminService {
         skip,
         take: pageSizeNum,
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
     ]);
 
     return {
@@ -332,12 +343,26 @@ export class AdminService {
     };
   }
 
-  async findAllPatients(page: number = 1, pageSize: number = 20) {
+  async findAllPatients(
+    page: number = 1,
+    pageSize: number = 20,
+    search?: string,
+  ) {
     const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
 
+    const where = search
+      ? {
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' as const } },
+            { lastName: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
     const [items, total] = await Promise.all([
       this.prisma.patient.findMany({
+        where,
         select: {
           id: true,
           firstName: true,
@@ -363,7 +388,7 @@ export class AdminService {
         skip,
         take: pageSizeNum,
       }),
-      this.prisma.patient.count(),
+      this.prisma.patient.count({ where }),
     ]);
 
     return {
@@ -372,6 +397,74 @@ export class AdminService {
       pageSize: pageSizeNum,
       total,
     };
+  }
+
+  // ==================== ROOM/THREAD/MESSAGE/PATIENT MANAGEMENT ====================
+
+  async updateRoom(
+    roomId: string,
+    data: { name?: string; visibility?: string },
+  ) {
+    const room = await this.prisma.room.findUnique({ where: { id: roomId } });
+    if (!room) throw new NotFoundException('Room not found');
+    return this.prisma.room.update({
+      where: { id: roomId },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.visibility !== undefined && {
+          visibility: data.visibility as RoomVisibility,
+        }),
+      },
+      select: {
+        id: true,
+        name: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async deleteRoom(roomId: string) {
+    const room = await this.prisma.room.findUnique({ where: { id: roomId } });
+    if (!room) throw new NotFoundException('Room not found');
+    await this.prisma.room.delete({
+      where: { id: roomId },
+    });
+    return { success: true };
+  }
+
+  async deleteThread(threadId: string) {
+    const thread = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+    });
+    if (!thread) throw new NotFoundException('Thread not found');
+    await this.prisma.thread.delete({
+      where: { id: threadId },
+    });
+    return { success: true };
+  }
+
+  async deleteMessage(messageId: string) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    await this.prisma.message.delete({
+      where: { id: messageId },
+    });
+    return { success: true };
+  }
+
+  async deletePatient(patientId: string) {
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+    });
+    if (!patient) throw new NotFoundException('Patient not found');
+    await this.prisma.patient.delete({
+      where: { id: patientId },
+    });
+    return { success: true };
   }
 
   // ==================== DASHBOARD STATISTICS ====================

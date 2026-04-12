@@ -83,10 +83,11 @@ export class AdminController {
   async findAllUsers(
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
+    @Query('search') search?: string,
   ) {
     const pageNum = Math.max(1, page || 1);
     const pageSizeNum = pageSize || 20;
-    return this.adminService.findAllUsers(pageNum, pageSizeNum);
+    return this.adminService.findAllUsers(pageNum, pageSizeNum, search);
   }
 
   @Get('users/:userId')
@@ -270,6 +271,40 @@ export class AdminController {
     const pageNum = Math.max(1, page || 1);
     const pageSizeNum = pageSize || 20;
     return this.adminService.findAllRooms(pageNum, pageSizeNum);
+  }
+
+  @Put('rooms/:roomId')
+  @ApiOperation({ summary: 'Update a room (admin only)' })
+  @ApiParam({ name: 'roomId', description: 'Room ID' })
+  async updateRoom(
+    @Param('roomId') roomId: string,
+    @Body() body: { name?: string; visibility?: string },
+  ) {
+    return this.adminService.updateRoom(roomId, body);
+  }
+
+  @Delete('rooms/:roomId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a room and all its threads/messages (admin only)' })
+  @ApiParam({ name: 'roomId', description: 'Room ID' })
+  async deleteRoom(@Param('roomId') roomId: string) {
+    return this.adminService.deleteRoom(roomId);
+  }
+
+  @Delete('threads/:threadId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a thread and all its messages (admin only)' })
+  @ApiParam({ name: 'threadId', description: 'Thread ID' })
+  async deleteThread(@Param('threadId') threadId: string) {
+    return this.adminService.deleteThread(threadId);
+  }
+
+  @Delete('messages/:messageId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a message (admin only)' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  async deleteMessage(@Param('messageId') messageId: string) {
+    return this.adminService.deleteMessage(messageId);
   }
 
   @Get('threads')
@@ -485,10 +520,19 @@ export class AdminController {
   async findAllPatients(
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
+    @Query('search') search?: string,
   ) {
     const pageNum = Math.max(1, page || 1);
     const pageSizeNum = pageSize || 20;
-    return this.adminService.findAllPatients(pageNum, pageSizeNum);
+    return this.adminService.findAllPatients(pageNum, pageSizeNum, search);
+  }
+
+  @Delete('patients/:patientId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a patient and all associated data (admin only)' })
+  @ApiParam({ name: 'patientId', description: 'Patient ID' })
+  async deletePatient(@Param('patientId') patientId: string) {
+    return this.adminService.deletePatient(patientId);
   }
 
   // ==================== DASHBOARD STATISTICS ====================

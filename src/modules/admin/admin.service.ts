@@ -21,8 +21,8 @@ export class AdminService {
   // ==================== USER MANAGEMENT ====================
 
   async findAllUsers(page: number = 1, pageSize: number = 20, search?: string) {
-    const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * pageSizeNum;
 
     const where = search
       ? {
@@ -197,8 +197,8 @@ export class AdminService {
   // ==================== LIST ALL ENTITIES ====================
 
   async findAllRooms(page: number = 1, pageSize: number = 20) {
-    const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * pageSizeNum;
 
     const [items, total] = await Promise.all([
       this.prisma.room.findMany({
@@ -242,8 +242,8 @@ export class AdminService {
   }
 
   async findAllThreads(page: number = 1, pageSize: number = 20) {
-    const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * pageSizeNum;
 
     const [items, total] = await Promise.all([
       this.prisma.thread.findMany({
@@ -292,8 +292,8 @@ export class AdminService {
   }
 
   async findAllMessages(page: number = 1, pageSize: number = 50) {
-    const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * pageSizeNum;
 
     const [items, total] = await Promise.all([
       this.prisma.message.findMany({
@@ -348,8 +348,8 @@ export class AdminService {
     pageSize: number = 20,
     search?: string,
   ) {
-    const skip = (page - 1) * pageSize;
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
+    const skip = (page - 1) * pageSizeNum;
 
     const where = search
       ? {

@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
+import { PrismaExceptionFilter } from './prisma/prisma-exception.filter';
 import { Request, Response } from 'express';
 import { json, urlencoded } from 'express';
 
@@ -18,6 +19,8 @@ async function bootstrap() {
     app.use(json({ limit: '2mb' }));
     app.use(urlencoded({ limit: '2mb', extended: true }));
     app.use(cookieParser());
+
+    app.useGlobalFilters(new PrismaExceptionFilter());
 
     // Enable global validation with security-focused options
     app.useGlobalPipes(

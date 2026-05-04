@@ -9,13 +9,15 @@ import { AiMessageRole, AiOwnerRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StreamChatDto } from './dto/stream-chat.dto';
 
-type AiContactSnippet = {
+export type AiContactSnippet = {
   id: string;
   name: string;
+  relation?: string | null;
   description?: string | null;
   photoUrl?: string | null;
   phone?: string | null;
   birthday?: string | null;
+  isEmergencyContact?: boolean;
 };
 
 @Injectable()
@@ -135,11 +137,13 @@ export class AiService {
       select: {
         id: true,
         name: true,
+        relation: true,
         description: true,
         photoUrl: true,
         phone: true,
+        isEmergencyContact: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ isEmergencyContact: 'desc' }, { createdAt: 'asc' }],
     });
 
     const normalizedQuery = userText.toLowerCase();
@@ -147,20 +151,51 @@ export class AiService {
       value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     const hasExplicitContactIntent =
-      /\b(my|our)\s+(contact|relative|family|caregiver)\b/i.test(normalizedQuery) ||
-      /\b(emergency contact|who is my|call my|show my contact)\b/i.test(
+      /\b(my|our)\s+(contact|relative|family|caregiver|mother|father|sister|brother|son|daughter|wife|husband|partner|friend)\b/i.test(
+        normalizedQuery,
+      ) ||
+      /\b(emergency contact|who is my|call my|show my contact|who takes care|caregiver|contact info|phone number of|number of|reach)\b/i.test(
         normalizedQuery,
       );
+
+    // Also detect relation-based queries (e.g. "my mom", "her sister")
+    const relationKeywords = [
+      'mother',
+      'father',
+      'mom',
+      'dad',
+      'sister',
+      'brother',
+      'son',
+      'daughter',
+      'wife',
+      'husband',
+      'partner',
+      'friend',
+      'caregiver',
+      'nurse',
+      'doctor',
+    ];
+    const hasRelationQuery = relationKeywords.some((kw) =>
+      new RegExp(`\\b${kw}\\b`, 'i').test(normalizedQuery),
+    );
 
     const matches = contacts.filter((contact) => {
       const fullName = contact.name.toLowerCase().trim();
       if (!fullName) return false;
 
-      // Strong match: full name appears as phrase.
+      // Strong match: full name appears as a phrase in the query.
       const fullNameRegex = new RegExp(`\\b${escapeRegExp(fullName)}\\b`, 'i');
       if (fullNameRegex.test(normalizedQuery)) return true;
 
-      // Fallback: all meaningful name tokens appear as whole words.
+      // Match by relation label (e.g. user asks "my sister" and contact.relation === "SISTER")
+      if (contact.relation) {
+        const rel = contact.relation.toLowerCase();
+        if (new RegExp(`\\b${escapeRegExp(rel)}\\b`, 'i').test(normalizedQuery))
+          return true;
+      }
+
+      // Fallback: all meaningful name tokens (≥4 chars) appear as whole words.
       const tokens = fullName.split(/\s+/).filter((t) => t.length >= 4);
       if (tokens.length < 2) return false;
       return tokens.every((token) =>
@@ -168,59 +203,93 @@ export class AiService {
       );
     });
 
-    if (matches.length === 0 && !hasExplicitContactIntent) {
+    const hasIntent = hasExplicitContactIntent || hasRelationQuery;
+
+    if (matches.length === 0 && !hasIntent) {
       return [];
     }
 
+    // Prefer matches; fall back to emergency contacts, then first contact
     const selectedContacts =
-      matches.length > 0 ? matches.slice(0, 4) : contacts.slice(0, 1);
+      matches.length > 0
+        ? matches.slice(0, 4)
+        : contacts.filter((c) => c.isEmergencyContact).slice(0, 1).length > 0
+          ? contacts.filter((c) => c.isEmergencyContact).slice(0, 1)
+          : contacts.slice(0, 1);
 
     return selectedContacts.map((c) => ({
       id: c.id,
       name: c.name,
-      description: c.description || 'No description available',
+      relation: c.relation || null,
+      description: c.description || null,
       photoUrl: c.photoUrl,
       phone: c.phone,
-      birthday: null, // Contact birthday is not yet modeled.
+      birthday: null,
+      isEmergencyContact: c.isEmergencyContact,
     }));
   }
 
   private buildSystemInstruction(context: {
     contacts: AiContactSnippet[];
     clinicalSummary?: string | null;
+    caregiverName?: string | null;
   }): string {
-    const contactsSummary =
-      context.contacts.length > 0
-        ? context.contacts
-            .map(
-              (c) =>
-                `- ${c.name}; description: ${c.description || 'n/a'}; phone: ${
-                  c.phone || 'n/a'
-                }; birthday: unknown`,
-            )
-            .join('\n')
-        : 'No contact context matched for this prompt.';
+    const hasContacts = context.contacts.length > 0;
+
+    const contactsSummary = hasContacts
+      ? context.contacts
+          .map((c) => {
+            const parts = [`Name: ${c.name}`];
+            if (c.relation) parts.push(`Relation: ${c.relation}`);
+            if (c.phone) parts.push(`Phone: ${c.phone}`);
+            if (c.isEmergencyContact) parts.push('Emergency contact: Yes');
+            if (c.description) parts.push(`Bio/Notes: ${c.description}`);
+            if (c.photoUrl) parts.push(`Has photo: Yes`);
+            return `• ${parts.join(' | ')}`;
+          })
+          .join('\n')
+      : 'No specific contact matched for this prompt.';
 
     const lines = [
-      'You are MemiMinds, a clever and playful Alzheimer/dementia support assistant.',
-      'Provide medically careful, evidence-based general education only.',
-      'Do not diagnose, and do not replace clinician advice.',
-      'When discussing treatments, mention uncertainty and encourage professional consultation.',
-      'Prioritize current consensus guidance and established evidence.',
-      'If user asks about a named person/relative, use only provided contact context and never invent personal facts.',
-      'When contact context exists, include a brief "Contact snapshot" section using those facts.',
-      'Contact context:',
+      "You are MemiMinds, a warm, knowledgeable, and caring AI companion specializing in Alzheimer's and dementia support.",
+      'You assist caregivers, doctors, and patients with education, emotional support, and practical guidance.',
+      '',
+      '## Core rules',
+      '- Provide medically careful, evidence-based information only.',
+      '- Never diagnose. Never replace professional clinical advice.',
+      '- When uncertain, acknowledge it and encourage professional consultation.',
+      '- Use compassionate, clear, and simple language.',
+      '- Respond in the same language the user is writing in.',
+      '',
+      '## When asked about a specific person (contact/relative/caregiver)',
+      '- Use ONLY the contact data provided below — never invent personal details.',
+      '- Write a warm, narrative bio that integrates all available facts (name, relation, phone, notes).',
+      '- If a photo exists, acknowledge it naturally (e.g. "As shown in the photo above...").',
+      '- Always end with a "Contact snapshot" section formatted as:',
+      '  ### Contact snapshot',
+      '  **Name:** ... | **Relation:** ... | **Phone:** ... | **Emergency:** Yes/No',
+      '- If the user asks for a phone number, state it clearly and prominently.',
+      '',
+      '## Contact context for this conversation',
       contactsSummary,
     ];
+
+    if (context.caregiverName) {
+      lines.push(
+        '',
+        `## Current caregiver/user`,
+        `The person using this app right now is: ${context.caregiverName}.`,
+      );
+    }
 
     if (context.clinicalSummary) {
       lines.push(
         '',
-        '--- Patient Clinical Context (use this to answer caregiver/doctor questions about the patient) ---',
+        '## Patient clinical context',
+        "(Use this to answer questions about the patient's history, illness, medications, and test results.)",
         context.clinicalSummary,
-        '--- End of Clinical Context ---',
-        "When answering questions about the patient's history, illness, or test results, draw from the clinical context above.",
-        'Always present clinical findings objectively and recommend professional evaluation for interpretation.',
+        '--- End of clinical context ---',
+        'Present clinical findings objectively. Always recommend professional evaluation for interpretation.',
       );
     }
 
@@ -240,7 +309,9 @@ export class AiService {
   }> {
     const geminiApiKey = this.config.get<string>('GEMINI_API_KEY');
     if (!geminiApiKey) {
-      throw new InternalServerErrorException('GEMINI_API_KEY is not configured');
+      throw new InternalServerErrorException(
+        'GEMINI_API_KEY is not configured',
+      );
     }
 
     const patientId = await this.resolvePatientIdForContext(
@@ -252,6 +323,17 @@ export class AiService {
     const lastUser = [...dto.messages]
       .reverse()
       .find((m) => m.role === 'user')?.content;
+
+    // Fetch caregiver/doctor name to personalize the system prompt
+    let caregiverName: string | null = null;
+    if (role !== 'PATIENT') {
+      const caller = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
+      if (caller)
+        caregiverName = `${caller.firstName} ${caller.lastName}`.trim();
+    }
 
     const [matchedContacts, clinicalSummary] = await Promise.all([
       this.getMatchedContacts(patientId, lastUser || ''),
@@ -265,6 +347,7 @@ export class AiService {
       systemInstruction: this.buildSystemInstruction({
         contacts: matchedContacts,
         clinicalSummary,
+        caregiverName,
       }),
       messages: dto.messages,
       matchedContacts,
@@ -299,7 +382,8 @@ export class AiService {
       return { id: existing.id, patientId: existing.patientId };
     }
 
-    const firstUser = dto.messages.find((m) => m.role === 'user')?.content || 'New chat';
+    const firstUser =
+      dto.messages.find((m) => m.role === 'user')?.content || 'New chat';
     const created = await this.prisma.aiConversation.create({
       data: {
         ownerId: userId,
@@ -374,7 +458,11 @@ export class AiService {
     });
   }
 
-  async getConversationMessages(userId: string, role: string, conversationId: string) {
+  async getConversationMessages(
+    userId: string,
+    role: string,
+    conversationId: string,
+  ) {
     const ownerRole = this.toOwnerRole(role);
     const conversation = await this.prisma.aiConversation.findFirst({
       where: {
@@ -401,7 +489,11 @@ export class AiService {
     });
   }
 
-  async deleteConversation(userId: string, role: string, conversationId: string) {
+  async deleteConversation(
+    userId: string,
+    role: string,
+    conversationId: string,
+  ) {
     const ownerRole = this.toOwnerRole(role);
     const conversation = await this.prisma.aiConversation.findFirst({
       where: {

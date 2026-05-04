@@ -90,7 +90,10 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^expo-server-sdk$": "<rootDir>/../test/__mocks__/expo-server-sdk.js"
+    }
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

@@ -61,8 +61,79 @@ export class AiController {
     return this.aiService.deleteConversation(req.user.id, req.user.role, conversationId);
   }
 
+  /**
+   * Non-streaming endpoint used by Android clients (and any client that
+   * cannot consume SSE).  Returns the full assistant reply as plain JSON
+   * once Gemini finishes, so there is no buffering/streaming issue.
+   */
+  @Post('/chat')
+  @ApiOperation({ summary: 'Non-streaming AI chat (for Android / fallback)' })
+  async chat(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: StreamChatDto,
+  ) {
+    const conversation = await this.aiService.upsertConversation(
+      req.user.id,
+      req.user.role,
+      dto,
+    );
+    const context = await this.aiService.createStreamContext(
+      req.user.id,
+      req.user.role,
+      dto,
+    );
+
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${context.geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: context.systemInstruction }],
+          },
+          contents: context.messages.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          })),
+          generationConfig: {
+            temperature: 0.35,
+            maxOutputTokens: 1100,
+          },
+        }),
+      },
+    );
+
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      throw new Error(`Gemini error: ${errorText}`);
+    }
+
+    const json = (await geminiResponse.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+
+    const assistantText =
+      json?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || '')
+        .join('') || '';
+
+    await this.aiService.saveExchange(
+      conversation.id,
+      context.lastUserMessage,
+      assistantText,
+      context.matchedContacts,
+    );
+
+    return {
+      conversationId: conversation.id,
+      text: assistantText,
+      contacts: context.matchedContacts,
+    };
+  }
+
   @Post('/chat/stream')
-  @ApiOperation({ summary: 'Stream AI response for chat' })
+  @ApiOperation({ summary: 'Stream AI response for chat (SSE)' })
   async streamChat(
     @Req() req: AuthenticatedRequest,
     @Body() dto: StreamChatDto,
@@ -80,8 +151,10 @@ export class AiController {
     );
 
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    // Disable Nginx / Render.com proxy buffering so chunks arrive in real-time
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
     const send = (payload: Record<string, unknown>) => {

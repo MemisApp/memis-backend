@@ -131,50 +131,82 @@ export class MessagesService {
       },
     });
 
-    // If this room is linked to a patient, push-notify them
-    this.notifyPatientIfLinked(
+    // Notify patient (if linked) and other room members (caregivers/doctors)
+    this.notifyRoomMembers(
       thread.roomId,
+      threadId,
+      userId,
       message.author,
       trimmedContent,
-    ).catch((err) => this.logger.error('Patient push failed', err));
+    ).catch((err) => this.logger.error('Notify room members failed', err));
 
     return message;
   }
 
-  /** Fire Expo push to the patient linked to the room (if any). */
-  private async notifyPatientIfLinked(
+  /** Fire AppNotification + Expo push to the patient and other user members of the room. */
+  private async notifyRoomMembers(
     roomId: string,
+    threadId: string,
+    senderUserId: string,
     sender: { firstName: string; lastName: string } | null,
     content: string,
   ) {
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
-      select: { patientId: true, name: true },
+      select: {
+        patientId: true,
+        name: true,
+        members: { select: { userId: true } },
+      },
     });
-    if (!room?.patientId) return;
+    if (!room) return;
 
     const senderName = sender
       ? `${sender.firstName} ${sender.lastName}`
       : 'Care Team';
     const preview =
       content.length > 100 ? `${content.slice(0, 100)}…` : content;
+    const data = { type: 'CHAT_MESSAGE', roomId, threadId };
 
-    await this.prisma.appNotification.create({
-      data: {
-        patientId: room.patientId,
-        title: `${senderName} sent a message`,
-        body: preview,
-        type: 'CHAT_MESSAGE',
-        metadata: { roomId },
-      },
-    });
+    if (room.patientId) {
+      await this.prisma.appNotification.create({
+        data: {
+          patientId: room.patientId,
+          title: `${senderName} sent a message`,
+          body: preview,
+          type: 'CHAT_MESSAGE',
+          metadata: { roomId, threadId },
+        },
+      });
+      await this.pushService.sendToPatient(
+        room.patientId,
+        `${senderName} sent a message`,
+        preview,
+        data,
+      );
+    }
 
-    await this.pushService.sendToPatient(
-      room.patientId,
-      `${senderName} sent a message`,
-      preview,
-      { type: 'CHAT_MESSAGE', roomId },
-    );
+    const otherMembers = room.members
+      .map((m) => m.userId)
+      .filter((id) => id && id !== senderUserId) as string[];
+
+    if (otherMembers.length) {
+      await this.prisma.appNotification.createMany({
+        data: otherMembers.map((uid) => ({
+          userId: uid,
+          title: `${senderName} sent a message`,
+          body: preview,
+          type: 'CHAT_MESSAGE',
+          metadata: { roomId, threadId },
+        })),
+      });
+      await this.pushService.sendToUsers(
+        otherMembers,
+        `${senderName} sent a message`,
+        preview,
+        data,
+      );
+    }
   }
 
   async getById(userId: string, messageId: string) {

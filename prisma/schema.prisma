@@ -8,19 +8,20 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String   @unique
-  phone        String?
-  avatarUrl    String?
-  workplace    Workplace?
-  profession   String?
-  title        String?
-  passwordHash String
-  role         Role     @default(CAREGIVER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String   @unique
+  phone         String?
+  avatarUrl     String?
+  workplace     Workplace?
+  profession    String?
+  title         String?
+  passwordHash  String
+  role          Role     @default(CAREGIVER)
+  expoPushToken String?  // For caregivers/doctors to receive push notifications
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   caregivers PatientCaregiver[]
   sessions   UserSession[]
@@ -122,16 +123,18 @@ model Device {
 }
 
 model Reminder {
-  id          String    @id @default(cuid())
-  patientId   String
-  type        String // PILLS | DOOR_LOCK | TEETH | PET_CARE | CUSTOM
-  title       String
-  notes       String?
-  schedule    String? // cron arba HH:MM
-  isActive    Boolean   @default(true)
-  lastFiredAt DateTime?
-  completed   Boolean   @default(false)
-  completedAt DateTime?
+  id            String    @id @default(cuid())
+  patientId     String
+  type          String // PILLS | DOOR_LOCK | TEETH | PET_CARE | CUSTOM
+  title         String
+  notes         String?
+  schedule      String? // HH:MM (time of day for recurring reminders)
+  recurrence    String    @default("DAILY") // ONCE | DAILY | WEEKLY | YEARLY
+  scheduledDate DateTime? // For ONCE/YEARLY: the specific date (YYYY-MM-DD)
+  isActive      Boolean   @default(true)
+  lastFiredAt   DateTime?
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -84,14 +84,23 @@ export class ClinicalService {
       },
     });
 
+    const data = {
+      type: input.type,
+      ...(input.metadata ?? {}),
+    };
+
     // Fire a real push notification to every registered device for this patient.
-    if (input.patientId) {
+    if (input.patientId && !input.userId) {
       this.pushService
-        .sendToPatient(input.patientId, input.title, input.body, {
-          type: input.type,
-          ...(input.metadata ?? {}),
-        })
-        .catch((err) => this.logger.error('Push notification failed', err));
+        .sendToPatient(input.patientId, input.title, input.body, data)
+        .catch((err) => this.logger.error('Patient push failed', err));
+    }
+
+    // Fire push to caregiver/doctor user if userId targeted
+    if (input.userId) {
+      this.pushService
+        .sendToUser(input.userId, input.title, input.body, data)
+        .catch((err) => this.logger.error('User push failed', err));
     }
   }
 
@@ -99,7 +108,42 @@ export class ClinicalService {
     await this.pushService.registerToken(patientId, devicePublicId, token);
   }
 
-  async searchPatients(query: string) {
+  async registerUserPushToken(userId: string, token: string) {
+    await this.pushService.registerUserToken(userId, token);
+  }
+
+  /**
+   * Notify all caregivers (and the patient) about an event on a patient.
+   * Also creates AppNotification rows + push notifications.
+   */
+  private async notifyCaregivers(
+    patientId: string,
+    title: string,
+    body: string,
+    type: string,
+    metadata?: Record<string, unknown>,
+  ) {
+    const caregivers = await this.prisma.patientCaregiver.findMany({
+      where: { patientId },
+      select: { caregiverId: true },
+    });
+
+    await Promise.all(
+      caregivers.map((c) =>
+        this.createNotification({
+          userId: c.caregiverId,
+          patientId,
+          title,
+          body,
+          type,
+          metadata,
+        }),
+      ),
+    );
+  }
+
+  async searchPatients(role: string, query: string) {
+    this.ensureDoctor(role);
     const term = query.trim();
     if (term.length < 2) return [];
 
@@ -177,6 +221,13 @@ export class ClinicalService {
       actorId: doctorId,
       metadata: { mmseAssigned: true, clockAssigned: true },
     });
+    await this.notifyCaregivers(
+      dto.patientId,
+      'A doctor was assigned to your patient',
+      'New MMSE and clock drawing tests have been assigned.',
+      'DOCTOR_ASSIGNED_CAREGIVER',
+      { mmseAssigned: true, clockAssigned: true },
+    );
 
     return assignment;
   }
@@ -394,26 +445,56 @@ export class ClinicalService {
   async assignMmse(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
     await this.ensureDoctorPatientAccess(doctorId, patientId);
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true },
+    });
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`.trim()
+      : 'patient';
     await this.createNotification({
       patientId,
       type: 'MMSE_ASSIGNED',
       title: 'MMSE assigned',
-      body: 'Your doctor assigned a new MMSE test.',
+      body: 'Your doctor assigned a new MMSE test. Please complete it with your caregiver.',
       actorId: doctorId,
+      metadata: { patientId, patientName },
     });
+    await this.notifyCaregivers(
+      patientId,
+      `MMSE assigned to ${patientName}`,
+      `A doctor assigned an MMSE test. Please help ${patientName} complete it.`,
+      'MMSE_ASSIGNED',
+      { assignedBy: doctorId, patientId, patientName },
+    );
     return { success: true };
   }
 
   async assignClockTest(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
     await this.ensureDoctorPatientAccess(doctorId, patientId);
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true },
+    });
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`.trim()
+      : 'patient';
     await this.createNotification({
       patientId,
       type: 'CLOCK_TEST_ASSIGNED',
       title: 'Clock test assigned',
       body: 'Your doctor assigned a new clock drawing test.',
       actorId: doctorId,
+      metadata: { patientId, patientName },
     });
+    await this.notifyCaregivers(
+      patientId,
+      `Clock test assigned to ${patientName}`,
+      `A doctor assigned a clock drawing test for ${patientName}.`,
+      'CLOCK_TEST_ASSIGNED',
+      { assignedBy: doctorId, patientId, patientName },
+    );
     return { success: true };
   }
 
@@ -617,6 +698,45 @@ export class ClinicalService {
     await this.ensureDoctorPatientAccess(doctorId, patientId);
     return this.prisma.clockTest.findMany({
       where: { patientId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Caregiver read-only access: ensure the user is linked to the patient. */
+  private async ensureCaregiverAccess(userId: string, patientId: string) {
+    const link = await this.prisma.patientCaregiver.findUnique({
+      where: { patientId_caregiverId: { patientId, caregiverId: userId } },
+    });
+    if (!link) throw new ForbiddenException('No access to this patient');
+  }
+
+  /** Caregiver read-only MMSE history. */
+  async getMmseHistoryForCaregiver(
+    caregiverId: string,
+    patientId: string,
+  ) {
+    await this.ensureCaregiverAccess(caregiverId, patientId);
+    return this.prisma.mMSETest.findMany({
+      where: { patientId },
+      select: { id: true, score: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Caregiver read-only clock test history. */
+  async getClockHistoryForCaregiver(
+    caregiverId: string,
+    patientId: string,
+  ) {
+    await this.ensureCaregiverAccess(caregiverId, patientId);
+    return this.prisma.clockTest.findMany({
+      where: { patientId },
+      select: {
+        id: true,
+        createdAt: true,
+        imageUrl: true,
+        metadata: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -986,12 +1106,14 @@ export class ClinicalService {
   }
 
   /**
-   * Doctor: find the room+thread shared with a specific patient, or null if none exists yet.
-   * Unlike getOrCreateDoctorThread (patient-side), this is read-only — it doesn't create.
+   * Doctor: find OR create the room+thread shared with a specific patient.
+   * Allows doctors to initiate a chat without waiting for the patient to message first.
    */
   async getDoctorPatientChatRoom(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
-    const room = await this.prisma.room.findFirst({
+    await this.ensureDoctorPatientAccess(doctorId, patientId);
+
+    const existingRoom = await this.prisma.room.findFirst({
       where: {
         patientId,
         members: { some: { userId: doctorId } },
@@ -1000,8 +1122,49 @@ export class ClinicalService {
         threads: { orderBy: { createdAt: 'asc' }, take: 1 },
       },
     });
-    if (!room || !room.threads[0]) return null;
-    return { roomId: room.id, threadId: room.threads[0].id };
+
+    if (existingRoom) {
+      const thread = existingRoom.threads[0];
+      if (thread) return { roomId: existingRoom.id, threadId: thread.id };
+
+      const newThread = await this.prisma.thread.create({
+        data: {
+          roomId: existingRoom.id,
+          title: 'Chat',
+          createdById: doctorId,
+        },
+      });
+      return { roomId: existingRoom.id, threadId: newThread.id };
+    }
+
+    const [doctor, patient] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: doctorId },
+        select: { firstName: true, lastName: true },
+      }),
+      this.prisma.patient.findUnique({
+        where: { id: patientId },
+        select: { firstName: true, lastName: true },
+      }),
+    ]);
+    const patientName = patient
+      ? `${patient.firstName} ${patient.lastName}`
+      : 'Patient';
+    const doctorLastName = doctor?.lastName ?? 'Doctor';
+
+    const room = await this.prisma.room.create({
+      data: {
+        name: `${patientName} — Dr. ${doctorLastName}`,
+        visibility: 'PRIVATE',
+        createdById: doctorId,
+        patientId,
+        members: { create: { userId: doctorId, role: 'OWNER' } },
+      },
+    });
+    const thread = await this.prisma.thread.create({
+      data: { roomId: room.id, title: 'Chat', createdById: doctorId },
+    });
+    return { roomId: room.id, threadId: thread.id };
   }
 
   /** Returns the active assigned doctor for a patient, or null if none. */

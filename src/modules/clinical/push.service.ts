@@ -24,6 +24,16 @@ export class PushService {
   }
 
   /**
+   * Store or update the Expo push token for a caregiver/doctor user.
+   */
+  async registerUserToken(userId: string, token: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { expoPushToken: token },
+    });
+  }
+
+  /**
    * Send a push notification to every registered device for a patient.
    * Silently removes invalid tokens from the database.
    */
@@ -60,25 +70,16 @@ export class PushService {
         body,
         data: data ?? {},
         sound: 'default',
+        priority: 'high',
+        channelId: this.resolveChannelId(data),
       });
       validDeviceIds.push(device.id);
     }
 
     if (!messages.length) return;
 
-    const chunks = this.expo.chunkPushNotifications(messages);
-    const tickets: ExpoPushTicket[] = [];
+    const tickets = await this.dispatchMessages(messages);
 
-    for (const chunk of chunks) {
-      try {
-        const chunkTickets = await this.expo.sendPushNotificationsAsync(chunk);
-        tickets.push(...chunkTickets);
-      } catch (err) {
-        this.logger.error('Failed to send push notification chunk', err);
-      }
-    }
-
-    // Remove tokens that are no longer valid (DeviceNotRegistered errors).
     for (let i = 0; i < tickets.length; i++) {
       const ticket = tickets[i];
       if (
@@ -97,5 +98,130 @@ export class PushService {
         }
       }
     }
+  }
+
+  /**
+   * Send a push notification to a single user (caregiver/doctor) by ID.
+   */
+  async sendToUser(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, expoPushToken: true },
+    });
+    if (!user?.expoPushToken) return;
+
+    const token = user.expoPushToken;
+    if (!Expo.isExpoPushToken(token)) {
+      this.logger.warn(`Invalid user push token for ${userId}`);
+      return;
+    }
+
+    const tickets = await this.dispatchMessages([
+      {
+        to: token,
+        title,
+        body,
+        data: data ?? {},
+        sound: 'default',
+        priority: 'high',
+        channelId: this.resolveChannelId(data),
+      },
+    ]);
+
+    const ticket = tickets[0];
+    if (
+      ticket?.status === 'error' &&
+      ticket.details?.error === 'DeviceNotRegistered'
+    ) {
+      this.logger.warn(`Clearing invalid push token for user ${userId}`);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { expoPushToken: null },
+      });
+    }
+  }
+
+  /**
+   * Send a push notification to multiple users (caregivers/doctors).
+   */
+  async sendToUsers(
+    userIds: string[],
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!userIds.length) return;
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds }, expoPushToken: { not: null } },
+      select: { id: true, expoPushToken: true },
+    });
+    if (!users.length) return;
+
+    const messages: ExpoPushMessage[] = [];
+    const validUserIds: string[] = [];
+
+    for (const user of users) {
+      const token = user.expoPushToken!;
+      if (!Expo.isExpoPushToken(token)) continue;
+      messages.push({
+        to: token,
+        title,
+        body,
+        data: data ?? {},
+        sound: 'default',
+        priority: 'high',
+        channelId: this.resolveChannelId(data),
+      });
+      validUserIds.push(user.id);
+    }
+
+    if (!messages.length) return;
+
+    const tickets = await this.dispatchMessages(messages);
+    for (let i = 0; i < tickets.length; i++) {
+      const ticket = tickets[i];
+      if (
+        ticket.status === 'error' &&
+        ticket.details?.error === 'DeviceNotRegistered'
+      ) {
+        const uid = validUserIds[i];
+        if (uid) {
+          await this.prisma.user.update({
+            where: { id: uid },
+            data: { expoPushToken: null },
+          });
+        }
+      }
+    }
+  }
+
+  private resolveChannelId(data?: Record<string, unknown>): string {
+    const type = typeof data?.type === 'string' ? data.type : '';
+    if (type.includes('REMINDER')) return 'reminders';
+    if (type === 'CHAT_MESSAGE') return 'messages';
+    if (type.includes('TEST') || type.includes('MMSE')) return 'tests';
+    return 'default';
+  }
+
+  private async dispatchMessages(
+    messages: ExpoPushMessage[],
+  ): Promise<ExpoPushTicket[]> {
+    const chunks = this.expo.chunkPushNotifications(messages);
+    const tickets: ExpoPushTicket[] = [];
+
+    for (const chunk of chunks) {
+      try {
+        const chunkTickets = await this.expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...chunkTickets);
+      } catch (err) {
+        this.logger.error('Failed to send push notification chunk', err);
+      }
+    }
+    return tickets;
   }
 }

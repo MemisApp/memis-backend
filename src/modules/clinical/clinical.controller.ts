@@ -38,8 +38,8 @@ export class ClinicalController {
 
   @Get('/doctor/patients/search')
   @ApiOperation({ summary: 'Search patients for doctor assignment' })
-  searchPatients(@Query('q') q = '') {
-    return this.clinicalService.searchPatients(q);
+  searchPatients(@Req() req: AuthenticatedRequest, @Query('q') q = '') {
+    return this.clinicalService.searchPatients(req.user.role, q);
   }
 
   @Get('/doctor/patients')
@@ -230,12 +230,39 @@ export class ClinicalController {
   }
 
   @Get('/doctor/patients/:patientId/chat-room')
-  @ApiOperation({ summary: 'Get the doctor-patient shared chat room and thread (read-only, no creation)' })
+  @ApiOperation({ summary: 'Get or create the doctor-patient shared chat room and thread' })
   getDoctorPatientChatRoom(
     @Req() req: AuthenticatedRequest,
     @Param('patientId') patientId: string,
   ) {
     return this.clinicalService.getDoctorPatientChatRoom(req.user.id, req.user.role, patientId);
+  }
+
+  @Post('/doctor/patients/:patientId/chat-room')
+  @ApiOperation({ summary: 'Create or fetch the doctor-patient chat room (idempotent)' })
+  createDoctorPatientChatRoom(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getDoctorPatientChatRoom(req.user.id, req.user.role, patientId);
+  }
+
+  @Get('/caregiver/patients/:patientId/tests/mmse')
+  @ApiOperation({ summary: 'Caregiver read-only MMSE history for patient' })
+  getCaregiverMmseHistory(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getMmseHistoryForCaregiver(req.user.id, patientId);
+  }
+
+  @Get('/caregiver/patients/:patientId/tests/clock')
+  @ApiOperation({ summary: 'Caregiver read-only clock test history for patient' })
+  getCaregiverClockHistory(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getClockHistoryForCaregiver(req.user.id, patientId);
   }
 
   @Get('/patient/my-doctor')
@@ -401,5 +428,14 @@ export class ClinicalController {
     @Body() dto: RegisterPushTokenDto,
   ) {
     return this.clinicalService.registerPushToken(req.user.id, dto.devicePublicId, dto.token);
+  }
+
+  @Post('/users/push-token')
+  @ApiOperation({ summary: 'Register Expo push token for the authenticated caregiver/doctor' })
+  registerUserPushToken(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { token: string },
+  ) {
+    return this.clinicalService.registerUserPushToken(req.user.id, body.token);
   }
 }

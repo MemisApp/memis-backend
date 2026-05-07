@@ -14,34 +14,44 @@ export class FcmService implements OnModuleInit {
       const keyPath = this.config.get<string>('FCM_SERVICE_ACCOUNT_PATH');
       if (keyPath) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const serviceAccount = require(keyPath);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-        });
-        this.initialized = true;
-        this.logger.log('Firebase Admin initialized from service account file');
-        return;
-      }
-
-      const keyJson = this.config.get<string>('FCM_SERVICE_ACCOUNT_JSON');
-      if (keyJson) {
-        const serviceAccount = JSON.parse(keyJson);
+        const serviceAccount = require(keyPath) as admin.ServiceAccount;
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
         this.initialized = true;
         this.logger.log(
-          'Firebase Admin initialized from service account JSON env',
+          `Firebase Admin initialized from file (project: ${String(serviceAccount.projectId)})`,
+        );
+        return;
+      }
+
+      const keyJson = this.config.get<string>('FCM_SERVICE_ACCOUNT_JSON');
+      if (keyJson) {
+        const raw = JSON.parse(keyJson) as Record<string, string>;
+        // Render and other hosts escape \n in env vars as literal \\n.
+        // firebase-admin needs real newlines in the PEM private key.
+        if (raw.private_key && typeof raw.private_key === 'string') {
+          raw.private_key = raw.private_key.replace(/\\n/g, '\n');
+        }
+        const sa: admin.ServiceAccount = {
+          projectId: raw.project_id,
+          clientEmail: raw.client_email,
+          privateKey: raw.private_key,
+        };
+        admin.initializeApp({ credential: admin.credential.cert(sa) });
+        this.initialized = true;
+        this.logger.log(
+          `Firebase Admin initialized from env JSON (project: ${String(sa.projectId)})`,
         );
         return;
       }
 
       this.logger.warn(
-        'No FCM_SERVICE_ACCOUNT_PATH or FCM_SERVICE_ACCOUNT_JSON env var set – ' +
-          'FCM direct push disabled. Android push will fall back to Expo Push Service.',
+        'FCM_SERVICE_ACCOUNT_PATH and FCM_SERVICE_ACCOUNT_JSON are both empty – ' +
+          'FCM direct push DISABLED. Android push will NOT work.',
       );
     } catch (err) {
-      this.logger.error('Failed to initialize Firebase Admin', err);
+      this.logger.error('FAILED to initialize Firebase Admin SDK', err);
     }
   }
 
@@ -49,10 +59,6 @@ export class FcmService implements OnModuleInit {
     return this.initialized;
   }
 
-  /**
-   * Send a push notification directly via FCM with the `notification` field,
-   * so Android OS auto-displays it even when the app is killed.
-   */
   async sendToDevice(
     fcmToken: string,
     title: string,
@@ -61,14 +67,25 @@ export class FcmService implements OnModuleInit {
     channelId = 'default',
   ): Promise<boolean> {
     if (!this.initialized) {
-      this.logger.warn('FCM not initialized – skipping direct send');
+      this.logger.error(
+        '[FCM] Not initialized – cannot send. Check FCM_SERVICE_ACCOUNT_JSON env var.',
+      );
       return false;
     }
 
-    const stringData: Record<string, string> = {};
+    const stringData: Record<string, string> = {
+      title,
+      body,
+      channelId,
+    };
     if (data) {
       for (const [k, v] of Object.entries(data)) {
-        stringData[k] = String(v ?? '');
+        stringData[k] =
+          typeof v === 'string'
+            ? v
+            : typeof v === 'number' || typeof v === 'boolean'
+              ? String(v)
+              : '';
       }
     }
 
@@ -90,27 +107,33 @@ export class FcmService implements OnModuleInit {
 
     try {
       const messageId = await admin.messaging().send(message);
-      this.logger.debug(`FCM message sent: ${messageId}`);
+      this.logger.log(
+        `[FCM] SENT OK → token=${fcmToken.substring(0, 15)}… ` +
+          `title="${title}" channel=${channelId} msgId=${messageId}`,
+      );
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as Record<string, unknown>;
+      const info = e?.errorInfo as Record<string, unknown> | undefined;
+      const code = (e?.code ?? info?.code ?? 'unknown') as string;
       if (
-        err?.code === 'messaging/registration-token-not-registered' ||
-        err?.code === 'messaging/invalid-registration-token'
+        code === 'messaging/registration-token-not-registered' ||
+        code === 'messaging/invalid-registration-token'
       ) {
         this.logger.warn(
-          `FCM token invalid/unregistered: ${fcmToken.substring(0, 20)}...`,
+          `[FCM] Token invalid (${code}): ${fcmToken.substring(0, 15)}…`,
         );
         return false;
       }
-      this.logger.error(`FCM send failed for token ${fcmToken.substring(0, 20)}...`, err);
+      this.logger.error(
+        `[FCM] SEND FAILED → token=${fcmToken.substring(0, 15)}… ` +
+          `code=${code} title="${title}"`,
+        err,
+      );
       return false;
     }
   }
 
-  /**
-   * Send to multiple FCM tokens. Returns list of tokens that failed
-   * with "not registered" errors (so caller can clean them up).
-   */
   async sendToDevices(
     fcmTokens: string[],
     title: string,

@@ -25,6 +25,11 @@ export class PushService {
     devicePublicId: string,
     token: string,
   ): Promise<void> {
+    const isExpo = this.isExpoToken(token);
+    this.logger.log(
+      `[REG] Patient token → patient=${patientId} device=${devicePublicId} ` +
+        `type=${isExpo ? 'expo' : 'fcm'} token=${token.substring(0, 20)}…`,
+    );
     await this.prisma.device.updateMany({
       where: { patientId, devicePublicId },
       data: { expoPushToken: token },
@@ -32,6 +37,11 @@ export class PushService {
   }
 
   async registerUserToken(userId: string, token: string): Promise<void> {
+    const isExpo = this.isExpoToken(token);
+    this.logger.log(
+      `[REG] User token → userId=${userId} ` +
+        `type=${isExpo ? 'expo' : 'fcm'} token=${token.substring(0, 20)}…`,
+    );
     await this.prisma.user.update({
       where: { id: userId },
       data: { expoPushToken: token },
@@ -44,13 +54,20 @@ export class PushService {
     body: string,
     data?: Record<string, unknown>,
   ): Promise<void> {
+    this.logger.log(
+      `[SEND] sendToPatient → patient=${patientId} title="${title}" ` +
+        `type=${(data?.type as string) ?? 'none'}`,
+    );
+
     const devices = await this.prisma.device.findMany({
       where: { patientId, expoPushToken: { not: null } },
       select: { id: true, expoPushToken: true, devicePublicId: true },
     });
 
     if (!devices.length) {
-      this.logger.debug(`No push tokens found for patient ${patientId}`);
+      this.logger.warn(
+        `[SEND] NO tokens found for patient ${patientId} – notification dropped`,
+      );
       return;
     }
 
@@ -64,7 +81,7 @@ export class PushService {
       if (this.isExpoToken(token)) {
         if (!Expo.isExpoPushToken(token)) {
           this.logger.warn(
-            `Invalid Expo token for device ${String(device.devicePublicId)}: ${String(token)}`,
+            `[SEND] Invalid Expo token for device ${String(device.devicePublicId)}`,
           );
           continue;
         }
@@ -75,42 +92,42 @@ export class PushService {
       }
     }
 
+    this.logger.log(
+      `[SEND] Patient ${patientId}: ${expoMessages.length} Expo tokens, ` +
+        `${fcmTokens.length} FCM tokens, FCM available=${this.fcm.isAvailable}`,
+    );
+
     if (expoMessages.length) {
       const tickets = await this.dispatchExpoMessages(expoMessages);
-      await this.cleanupInvalidExpoTokens(tickets, expoDeviceIds, 'device');
+      await this.cleanupInvalidTokens(tickets, expoDeviceIds, 'device');
     }
 
-    if (fcmTokens.length && this.fcm.isAvailable) {
-      const invalidTokens = await this.fcm.sendToDevices(
-        fcmTokens.map((t) => t.token),
-        title,
-        body,
-        data,
-        channelId,
-      );
-      for (const inv of invalidTokens) {
-        const entry = fcmTokens.find((t) => t.token === inv);
-        if (entry) {
-          this.logger.warn(
-            `Clearing invalid FCM token for device ${entry.deviceId}`,
-          );
-          await this.prisma.device.update({
-            where: { id: entry.deviceId },
-            data: { expoPushToken: null },
-          });
+    if (fcmTokens.length) {
+      if (this.fcm.isAvailable) {
+        const invalidTokens = await this.fcm.sendToDevices(
+          fcmTokens.map((t) => t.token),
+          title,
+          body,
+          data,
+          channelId,
+        );
+        for (const inv of invalidTokens) {
+          const entry = fcmTokens.find((t) => t.token === inv);
+          if (entry) {
+            this.logger.warn(
+              `[SEND] Clearing dead FCM token for device ${entry.deviceId}`,
+            );
+            await this.prisma.device.update({
+              where: { id: entry.deviceId },
+              data: { expoPushToken: null },
+            });
+          }
         }
-      }
-    } else if (fcmTokens.length) {
-      this.logger.warn(
-        'FCM tokens found but FcmService not available – sending via Expo fallback',
-      );
-      for (const { token, deviceId } of fcmTokens) {
-        expoMessages.push(this.buildExpoMessage(token, title, body, data));
-        expoDeviceIds.push(deviceId);
-      }
-      if (expoMessages.length) {
-        const tickets = await this.dispatchExpoMessages(expoMessages);
-        await this.cleanupInvalidExpoTokens(tickets, expoDeviceIds, 'device');
+      } else {
+        this.logger.error(
+          `[SEND] FCM NOT AVAILABLE but have ${fcmTokens.length} FCM tokens – ` +
+            `notifications WILL NOT be delivered! Set FCM_SERVICE_ACCOUNT_JSON env var.`,
+        );
       }
     }
   }
@@ -121,35 +138,56 @@ export class PushService {
     body: string,
     data?: Record<string, unknown>,
   ): Promise<void> {
+    this.logger.log(
+      `[SEND] sendToUser → userId=${userId} title="${title}" ` +
+        `type=${(data?.type as string) ?? 'none'}`,
+    );
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, expoPushToken: true },
     });
-    if (!user?.expoPushToken) return;
+
+    if (!user?.expoPushToken) {
+      this.logger.warn(`[SEND] No push token for user ${userId} – dropped`);
+      return;
+    }
 
     const token = user.expoPushToken;
-    const channelId = this.resolveChannelId(data);
+    const isExpo = this.isExpoToken(token);
 
-    if (!this.isExpoToken(token) && this.fcm.isAvailable) {
-      const ok = await this.fcm.sendToDevice(
-        token,
-        title,
-        body,
-        data,
-        channelId,
-      );
-      if (!ok) {
-        this.logger.warn(`Clearing invalid FCM token for user ${userId}`);
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: { expoPushToken: null },
-        });
+    this.logger.log(
+      `[SEND] User ${userId}: tokenType=${isExpo ? 'expo' : 'fcm'} ` +
+        `token=${token.substring(0, 15)}… FCM available=${this.fcm.isAvailable}`,
+    );
+
+    if (!isExpo) {
+      if (this.fcm.isAvailable) {
+        const channelId = this.resolveChannelId(data);
+        const ok = await this.fcm.sendToDevice(
+          token,
+          title,
+          body,
+          data,
+          channelId,
+        );
+        if (!ok) {
+          this.logger.warn(`[SEND] Clearing dead FCM token for user ${userId}`);
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { expoPushToken: null },
+          });
+        }
+      } else {
+        this.logger.error(
+          `[SEND] FCM NOT AVAILABLE for user ${userId} – notification dropped!`,
+        );
       }
       return;
     }
 
     if (!Expo.isExpoPushToken(token)) {
-      this.logger.warn(`Invalid push token for user ${userId}`);
+      this.logger.warn(`[SEND] Invalid Expo token for user ${userId}`);
       return;
     }
 
@@ -162,7 +200,7 @@ export class PushService {
       ticket?.status === 'error' &&
       ticket.details?.error === 'DeviceNotRegistered'
     ) {
-      this.logger.warn(`Clearing invalid push token for user ${userId}`);
+      this.logger.warn(`[SEND] Clearing dead Expo token for user ${userId}`);
       await this.prisma.user.update({
         where: { id: userId },
         data: { expoPushToken: null },
@@ -177,11 +215,23 @@ export class PushService {
     data?: Record<string, unknown>,
   ): Promise<void> {
     if (!userIds.length) return;
+
+    this.logger.log(
+      `[SEND] sendToUsers → ${userIds.length} users, title="${title}" ` +
+        `type=${(data?.type as string) ?? 'none'}`,
+    );
+
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds }, expoPushToken: { not: null } },
       select: { id: true, expoPushToken: true },
     });
-    if (!users.length) return;
+
+    if (!users.length) {
+      this.logger.warn(
+        `[SEND] No tokens for any of ${userIds.length} users – dropped`,
+      );
+      return;
+    }
 
     const channelId = this.resolveChannelId(data);
     const expoMessages: ExpoPushMessage[] = [];
@@ -199,41 +249,39 @@ export class PushService {
       }
     }
 
+    this.logger.log(
+      `[SEND] Users batch: ${expoMessages.length} Expo, ` +
+        `${fcmEntries.length} FCM, FCM available=${this.fcm.isAvailable}`,
+    );
+
     if (expoMessages.length) {
       const tickets = await this.dispatchExpoMessages(expoMessages);
-      await this.cleanupInvalidExpoTokens(tickets, expoUserIds, 'user');
+      await this.cleanupInvalidTokens(tickets, expoUserIds, 'user');
     }
 
-    if (fcmEntries.length && this.fcm.isAvailable) {
-      const invalidTokens = await this.fcm.sendToDevices(
-        fcmEntries.map((e) => e.token),
-        title,
-        body,
-        data,
-        channelId,
-      );
-      for (const inv of invalidTokens) {
-        const entry = fcmEntries.find((e) => e.token === inv);
-        if (entry) {
-          await this.prisma.user.update({
-            where: { id: entry.userId },
-            data: { expoPushToken: null },
-          });
+    if (fcmEntries.length) {
+      if (this.fcm.isAvailable) {
+        const invalidTokens = await this.fcm.sendToDevices(
+          fcmEntries.map((e) => e.token),
+          title,
+          body,
+          data,
+          channelId,
+        );
+        for (const inv of invalidTokens) {
+          const entry = fcmEntries.find((e) => e.token === inv);
+          if (entry) {
+            await this.prisma.user.update({
+              where: { id: entry.userId },
+              data: { expoPushToken: null },
+            });
+          }
         }
-      }
-    } else if (fcmEntries.length) {
-      this.logger.warn(
-        'FCM tokens found but FcmService not available – sending via Expo fallback',
-      );
-      for (const { token, userId } of fcmEntries) {
-        if (Expo.isExpoPushToken(token)) {
-          expoMessages.push(this.buildExpoMessage(token, title, body, data));
-          expoUserIds.push(userId);
-        }
-      }
-      if (expoMessages.length) {
-        const tickets = await this.dispatchExpoMessages(expoMessages);
-        await this.cleanupInvalidExpoTokens(tickets, expoUserIds, 'user');
+      } else {
+        this.logger.error(
+          `[SEND] FCM NOT AVAILABLE but have ${fcmEntries.length} FCM tokens – ` +
+            `notifications dropped! Set FCM_SERVICE_ACCOUNT_JSON env var.`,
+        );
       }
     }
   }
@@ -259,6 +307,7 @@ export class PushService {
     const type = typeof data?.type === 'string' ? data.type : '';
     if (type.includes('REMINDER')) return 'reminders';
     if (type === 'CHAT_MESSAGE') return 'messages';
+    if (type.includes('ASSIGNED')) return 'tests';
     if (type.includes('TEST') || type.includes('MMSE')) return 'tests';
     return 'default';
   }
@@ -273,14 +322,23 @@ export class PushService {
       try {
         const chunkTickets = await this.expo.sendPushNotificationsAsync(chunk);
         tickets.push(...chunkTickets);
+        for (const t of chunkTickets) {
+          if (t.status === 'ok') {
+            this.logger.log(`[EXPO] Sent OK → id=${t.id}`);
+          } else {
+            this.logger.error(
+              `[EXPO] SEND FAILED → ${t.message} (${t.details?.error ?? 'unknown'})`,
+            );
+          }
+        }
       } catch (err) {
-        this.logger.error('Failed to send Expo push notification chunk', err);
+        this.logger.error('[EXPO] Failed to send chunk', err);
       }
     }
     return tickets;
   }
 
-  private async cleanupInvalidExpoTokens(
+  private async cleanupInvalidTokens(
     tickets: ExpoPushTicket[],
     entityIds: string[],
     entityType: 'device' | 'user',
@@ -293,7 +351,9 @@ export class PushService {
       ) {
         const id = entityIds[i];
         if (!id) continue;
-        this.logger.warn(`Clearing invalid Expo token for ${entityType} ${id}`);
+        this.logger.warn(
+          `[CLEANUP] Clearing dead Expo token for ${entityType} ${id}`,
+        );
         if (entityType === 'device') {
           await this.prisma.device.update({
             where: { id },

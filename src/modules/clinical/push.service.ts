@@ -1,17 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Expo, { ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FcmService } from './fcm.service';
 
 @Injectable()
 export class PushService {
   private readonly expo = new Expo();
   private readonly logger = new Logger(PushService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fcm: FcmService,
+  ) {}
 
-  /**
-   * Store or update the Expo push token for a specific patient device.
-   */
+  private isExpoToken(token: string): boolean {
+    return (
+      token.startsWith('ExponentPushToken[') ||
+      token.startsWith('ExpoPushToken[')
+    );
+  }
+
   async registerToken(
     patientId: string,
     devicePublicId: string,
@@ -23,9 +31,6 @@ export class PushService {
     });
   }
 
-  /**
-   * Store or update the Expo push token for a caregiver/doctor user.
-   */
   async registerUserToken(userId: string, token: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
@@ -33,10 +38,6 @@ export class PushService {
     });
   }
 
-  /**
-   * Send a push notification to every registered device for a patient.
-   * Silently removes invalid tokens from the database.
-   */
   async sendToPatient(
     patientId: string,
     title: string,
@@ -53,48 +54,67 @@ export class PushService {
       return;
     }
 
-    const messages: ExpoPushMessage[] = [];
-    const validDeviceIds: string[] = [];
+    const channelId = this.resolveChannelId(data);
+    const expoMessages: ExpoPushMessage[] = [];
+    const expoDeviceIds: string[] = [];
+    const fcmTokens: { token: string; deviceId: string }[] = [];
 
     for (const device of devices) {
       const token = device.expoPushToken!;
-      if (!Expo.isExpoPushToken(token)) {
-        this.logger.warn(
-          `Invalid push token for device ${String(device.devicePublicId)}: ${String(token)}`,
-        );
-        continue;
+      if (this.isExpoToken(token)) {
+        if (!Expo.isExpoPushToken(token)) {
+          this.logger.warn(
+            `Invalid Expo token for device ${String(device.devicePublicId)}: ${String(token)}`,
+          );
+          continue;
+        }
+        expoMessages.push(this.buildExpoMessage(token, title, body, data));
+        expoDeviceIds.push(device.id);
+      } else {
+        fcmTokens.push({ token, deviceId: device.id });
       }
-      messages.push(this.buildMessage(token, title, body, data));
-      validDeviceIds.push(device.id);
     }
 
-    if (!messages.length) return;
+    if (expoMessages.length) {
+      const tickets = await this.dispatchExpoMessages(expoMessages);
+      await this.cleanupInvalidExpoTokens(tickets, expoDeviceIds, 'device');
+    }
 
-    const tickets = await this.dispatchMessages(messages);
-
-    for (let i = 0; i < tickets.length; i++) {
-      const ticket = tickets[i];
-      if (
-        ticket.status === 'error' &&
-        ticket.details?.error === 'DeviceNotRegistered'
-      ) {
-        const deviceId = validDeviceIds[i];
-        if (deviceId) {
+    if (fcmTokens.length && this.fcm.isAvailable) {
+      const invalidTokens = await this.fcm.sendToDevices(
+        fcmTokens.map((t) => t.token),
+        title,
+        body,
+        data,
+        channelId,
+      );
+      for (const inv of invalidTokens) {
+        const entry = fcmTokens.find((t) => t.token === inv);
+        if (entry) {
           this.logger.warn(
-            `Clearing invalid push token for device ${deviceId}`,
+            `Clearing invalid FCM token for device ${entry.deviceId}`,
           );
           await this.prisma.device.update({
-            where: { id: deviceId },
+            where: { id: entry.deviceId },
             data: { expoPushToken: null },
           });
         }
       }
+    } else if (fcmTokens.length) {
+      this.logger.warn(
+        'FCM tokens found but FcmService not available – sending via Expo fallback',
+      );
+      for (const { token, deviceId } of fcmTokens) {
+        expoMessages.push(this.buildExpoMessage(token, title, body, data));
+        expoDeviceIds.push(deviceId);
+      }
+      if (expoMessages.length) {
+        const tickets = await this.dispatchExpoMessages(expoMessages);
+        await this.cleanupInvalidExpoTokens(tickets, expoDeviceIds, 'device');
+      }
     }
   }
 
-  /**
-   * Send a push notification to a single user (caregiver/doctor) by ID.
-   */
   async sendToUser(
     userId: string,
     title: string,
@@ -108,13 +128,33 @@ export class PushService {
     if (!user?.expoPushToken) return;
 
     const token = user.expoPushToken;
-    if (!Expo.isExpoPushToken(token)) {
-      this.logger.warn(`Invalid user push token for ${userId}`);
+    const channelId = this.resolveChannelId(data);
+
+    if (!this.isExpoToken(token) && this.fcm.isAvailable) {
+      const ok = await this.fcm.sendToDevice(
+        token,
+        title,
+        body,
+        data,
+        channelId,
+      );
+      if (!ok) {
+        this.logger.warn(`Clearing invalid FCM token for user ${userId}`);
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { expoPushToken: null },
+        });
+      }
       return;
     }
 
-    const tickets = await this.dispatchMessages([
-      this.buildMessage(token, title, body, data),
+    if (!Expo.isExpoPushToken(token)) {
+      this.logger.warn(`Invalid push token for user ${userId}`);
+      return;
+    }
+
+    const tickets = await this.dispatchExpoMessages([
+      this.buildExpoMessage(token, title, body, data),
     ]);
 
     const ticket = tickets[0];
@@ -130,9 +170,6 @@ export class PushService {
     }
   }
 
-  /**
-   * Send a push notification to multiple users (caregivers/doctors).
-   */
   async sendToUsers(
     userIds: string[],
     title: string,
@@ -146,37 +183,62 @@ export class PushService {
     });
     if (!users.length) return;
 
-    const messages: ExpoPushMessage[] = [];
-    const validUserIds: string[] = [];
+    const channelId = this.resolveChannelId(data);
+    const expoMessages: ExpoPushMessage[] = [];
+    const expoUserIds: string[] = [];
+    const fcmEntries: { token: string; userId: string }[] = [];
 
     for (const user of users) {
       const token = user.expoPushToken!;
-      if (!Expo.isExpoPushToken(token)) continue;
-      messages.push(this.buildMessage(token, title, body, data));
-      validUserIds.push(user.id);
+      if (this.isExpoToken(token)) {
+        if (!Expo.isExpoPushToken(token)) continue;
+        expoMessages.push(this.buildExpoMessage(token, title, body, data));
+        expoUserIds.push(user.id);
+      } else {
+        fcmEntries.push({ token, userId: user.id });
+      }
     }
 
-    if (!messages.length) return;
+    if (expoMessages.length) {
+      const tickets = await this.dispatchExpoMessages(expoMessages);
+      await this.cleanupInvalidExpoTokens(tickets, expoUserIds, 'user');
+    }
 
-    const tickets = await this.dispatchMessages(messages);
-    for (let i = 0; i < tickets.length; i++) {
-      const ticket = tickets[i];
-      if (
-        ticket.status === 'error' &&
-        ticket.details?.error === 'DeviceNotRegistered'
-      ) {
-        const uid = validUserIds[i];
-        if (uid) {
+    if (fcmEntries.length && this.fcm.isAvailable) {
+      const invalidTokens = await this.fcm.sendToDevices(
+        fcmEntries.map((e) => e.token),
+        title,
+        body,
+        data,
+        channelId,
+      );
+      for (const inv of invalidTokens) {
+        const entry = fcmEntries.find((e) => e.token === inv);
+        if (entry) {
           await this.prisma.user.update({
-            where: { id: uid },
+            where: { id: entry.userId },
             data: { expoPushToken: null },
           });
         }
       }
+    } else if (fcmEntries.length) {
+      this.logger.warn(
+        'FCM tokens found but FcmService not available – sending via Expo fallback',
+      );
+      for (const { token, userId } of fcmEntries) {
+        if (Expo.isExpoPushToken(token)) {
+          expoMessages.push(this.buildExpoMessage(token, title, body, data));
+          expoUserIds.push(userId);
+        }
+      }
+      if (expoMessages.length) {
+        const tickets = await this.dispatchExpoMessages(expoMessages);
+        await this.cleanupInvalidExpoTokens(tickets, expoUserIds, 'user');
+      }
     }
   }
 
-  private buildMessage(
+  private buildExpoMessage(
     token: string,
     title: string,
     body: string,
@@ -190,8 +252,7 @@ export class PushService {
       sound: 'default',
       priority: 'high',
       channelId: this.resolveChannelId(data),
-      _contentAvailable: true,
-    } as ExpoPushMessage;
+    };
   }
 
   private resolveChannelId(data?: Record<string, unknown>): string {
@@ -202,7 +263,7 @@ export class PushService {
     return 'default';
   }
 
-  private async dispatchMessages(
+  private async dispatchExpoMessages(
     messages: ExpoPushMessage[],
   ): Promise<ExpoPushTicket[]> {
     const chunks = this.expo.chunkPushNotifications(messages);
@@ -213,9 +274,38 @@ export class PushService {
         const chunkTickets = await this.expo.sendPushNotificationsAsync(chunk);
         tickets.push(...chunkTickets);
       } catch (err) {
-        this.logger.error('Failed to send push notification chunk', err);
+        this.logger.error('Failed to send Expo push notification chunk', err);
       }
     }
     return tickets;
+  }
+
+  private async cleanupInvalidExpoTokens(
+    tickets: ExpoPushTicket[],
+    entityIds: string[],
+    entityType: 'device' | 'user',
+  ): Promise<void> {
+    for (let i = 0; i < tickets.length; i++) {
+      const ticket = tickets[i];
+      if (
+        ticket.status === 'error' &&
+        ticket.details?.error === 'DeviceNotRegistered'
+      ) {
+        const id = entityIds[i];
+        if (!id) continue;
+        this.logger.warn(`Clearing invalid Expo token for ${entityType} ${id}`);
+        if (entityType === 'device') {
+          await this.prisma.device.update({
+            where: { id },
+            data: { expoPushToken: null },
+          });
+        } else {
+          await this.prisma.user.update({
+            where: { id },
+            data: { expoPushToken: null },
+          });
+        }
+      }
+    }
   }
 }

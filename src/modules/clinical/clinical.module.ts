@@ -4,12 +4,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ClinicalController } from './clinical.controller';
 import { ClinicalService } from './clinical.service';
+import { FcmService } from './fcm.service';
 import { PushService } from './push.service';
 
 @Module({
   imports: [PrismaModule, ConfigModule, JwtModule.register({})],
   controllers: [ClinicalController],
-  providers: [ClinicalService, PushService],
-  exports: [ClinicalService, PushService],
+  providers: [ClinicalService, FcmService, PushService],
+  exports: [ClinicalService, FcmService, PushService],
 })
 export class ClinicalModule {}

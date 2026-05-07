@@ -64,15 +64,7 @@ export class PushService {
         );
         continue;
       }
-      messages.push({
-        to: token,
-        title,
-        body,
-        data: data ?? {},
-        sound: 'default',
-        priority: 'high',
-        channelId: this.resolveChannelId(data),
-      });
+      messages.push(this.buildMessage(token, title, body, data));
       validDeviceIds.push(device.id);
     }
 
@@ -122,15 +114,7 @@ export class PushService {
     }
 
     const tickets = await this.dispatchMessages([
-      {
-        to: token,
-        title,
-        body,
-        data: data ?? {},
-        sound: 'default',
-        priority: 'high',
-        channelId: this.resolveChannelId(data),
-      },
+      this.buildMessage(token, title, body, data),
     ]);
 
     const ticket = tickets[0];
@@ -168,15 +152,7 @@ export class PushService {
     for (const user of users) {
       const token = user.expoPushToken!;
       if (!Expo.isExpoPushToken(token)) continue;
-      messages.push({
-        to: token,
-        title,
-        body,
-        data: data ?? {},
-        sound: 'default',
-        priority: 'high',
-        channelId: this.resolveChannelId(data),
-      });
+      messages.push(this.buildMessage(token, title, body, data));
       validUserIds.push(user.id);
     }
 
@@ -198,6 +174,24 @@ export class PushService {
         }
       }
     }
+  }
+
+  private buildMessage(
+    token: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): ExpoPushMessage {
+    return {
+      to: token,
+      title,
+      body,
+      data: data ?? {},
+      sound: 'default',
+      priority: 'high',
+      channelId: this.resolveChannelId(data),
+      _contentAvailable: true,
+    } as ExpoPushMessage;
   }
 
   private resolveChannelId(data?: Record<string, unknown>): string {

@@ -75,38 +75,21 @@ export class FcmService implements OnModuleInit {
 
     const stringData: Record<string, string> = {
       title,
-      body,
+      message: body, // Expo expects the text body in 'message'
+      body: JSON.stringify(data || {}), // Expo expects custom data stringified in 'body'
       channelId,
     };
-    if (data) {
-      for (const [k, v] of Object.entries(data)) {
-        stringData[k] =
-          typeof v === 'string'
-            ? v
-            : typeof v === 'number' || typeof v === 'boolean'
-              ? String(v)
-              : '';
-      }
-    }
 
-    const message: admin.messaging.Message = {
+    const messagePayload: admin.messaging.Message = {
       token: fcmToken,
-      notification: { title, body },
       data: stringData,
       android: {
         priority: 'high',
-        notification: {
-          channelId,
-          sound: 'default',
-          priority: 'high',
-          defaultVibrateTimings: true,
-          defaultLightSettings: true,
-        },
       },
     };
 
     try {
-      const messageId = await admin.messaging().send(message);
+      const messageId = await admin.messaging().send(messagePayload);
       this.logger.log(
         `[FCM] SENT OK → token=${fcmToken.substring(0, 15)}… ` +
           `title="${title}" channel=${channelId} msgId=${messageId}`,

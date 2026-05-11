@@ -28,7 +28,6 @@ export class PatientsService {
       throw new NotFoundException('Caregiver not found');
     }
 
-    // Create patient, assign caregiver, and auto-create caregiver emergency contact.
     const patient = await this.prisma.$transaction(async (tx) => {
       const createdPatient = await tx.patient.create({
         data: {
@@ -73,7 +72,6 @@ export class PatientsService {
       return createdPatient;
     });
 
-    // Generate initial pairing code
     const pairingCode = await this.generatePairingCode(patient.id, caregiverId);
 
     return {
@@ -111,7 +109,6 @@ export class PatientsService {
   }
 
   async findOne(patientId: string, userId: string) {
-    // Check if user has access to this patient
     const hasAccess = await this.hasPatientAccess(userId, patientId);
     if (!hasAccess) {
       throw new ForbiddenException('No access to this patient');
@@ -152,7 +149,6 @@ export class PatientsService {
   }
 
   async update(patientId: string, userId: string, dto: UpdatePatientDto) {
-    // Check if user has OWNER or EDITOR access
     const hasEditAccess = await this.hasPatientEditAccess(userId, patientId);
     if (!hasEditAccess) {
       throw new ForbiddenException('Insufficient permissions to edit patient');
@@ -189,7 +185,6 @@ export class PatientsService {
   }
 
   async remove(patientId: string, userId: string, userRole: string) {
-    // Only OWNER caregivers or ADMINs can delete patients
     const isAdmin = userRole === Role.ADMIN;
     const isOwner = await this.isPatientOwner(userId, patientId);
 
@@ -207,16 +202,14 @@ export class PatientsService {
   }
 
   async generatePairingCode(patientId: string, caregiverId: string) {
-    // Check access
     const hasAccess = await this.hasPatientAccess(caregiverId, patientId);
     if (!hasAccess) {
       throw new ForbiddenException('No access to this patient');
     }
 
-    // Generate 8-character code
     const code = this.generateRandomCode();
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours expiry
+    expiresAt.setHours(expiresAt.getHours() + 24);
 
     const pairingCode = await this.prisma.pairingCode.create({
       data: {

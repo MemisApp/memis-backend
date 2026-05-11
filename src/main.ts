@@ -22,17 +22,15 @@ async function bootstrap() {
 
     app.useGlobalFilters(new PrismaExceptionFilter());
 
-    // Enable global validation with security-focused options
     app.useGlobalPipes(
       new ValidationPipe({
-        whitelist: true, // Strip properties that don't have validation decorators
-        forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are found
-        transform: true, // Automatically transform payloads to DTO instances
-        disableErrorMessages: false, // Keep error messages for development
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        disableErrorMessages: false,
       }),
     );
 
-    // Redirect root URL to health endpoint
     app.use('/', (req: Request, res: Response, next: () => void) => {
       if (req.path === '/') {
         res.redirect('/health');
@@ -53,7 +51,6 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('swagger', app, document);
 
-    // Enable Prisma shutdown hooks
     const prismaService = app.get(PrismaService);
     prismaService.enableShutdownHooks(app);
 

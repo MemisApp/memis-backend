@@ -34,8 +34,6 @@ import { AdminGuard } from '../../auth/admin.guard';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  // ==================== USER MANAGEMENT ====================
-
   @Get('users')
   @ApiOperation({ summary: 'List all users (admin only)' })
   @ApiQuery({
@@ -203,8 +201,6 @@ export class AdminController {
   async deleteUser(@Param('userId') userId: string) {
     return this.adminService.deleteUser(userId);
   }
-
-  // ==================== LIST ALL ENTITIES ====================
 
   @Get('rooms')
   @ApiOperation({ summary: 'List all rooms (admin only)' })
@@ -534,8 +530,6 @@ export class AdminController {
   async deletePatient(@Param('patientId') patientId: string) {
     return this.adminService.deletePatient(patientId);
   }
-
-  // ==================== DASHBOARD STATISTICS ====================
 
   @Get('stats')
   @ApiOperation({ summary: 'Get dashboard statistics (admin only)' })

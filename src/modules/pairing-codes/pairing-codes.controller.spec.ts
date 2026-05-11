@@ -35,8 +35,6 @@ describe('PairingCodesController', () => {
   const makeReq = (userId = 'user-1', role = 'CAREGIVER') =>
     ({ user: { id: userId, role } } as any);
 
-  // revokePairingCode
-
   describe('revokePairingCode', () => {
     it('delegates to PatientsService and returns success', async () => {
       mockPatientsService.revokePairingCode.mockResolvedValue({ success: true });

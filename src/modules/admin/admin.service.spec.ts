@@ -79,8 +79,6 @@ describe('AdminService', () => {
     updatedAt: new Date(),
   };
 
-  // findAllUsers
-
   describe('findAllUsers', () => {
     it('returns paginated users', async () => {
       mockPrisma.user.findMany.mockResolvedValue([mockUser]);
@@ -137,8 +135,6 @@ describe('AdminService', () => {
     });
   });
 
-  // findUserById
-
   describe('findUserById', () => {
     it('returns a user by id', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
@@ -156,8 +152,6 @@ describe('AdminService', () => {
       );
     });
   });
-
-  // createUser
 
   describe('createUser', () => {
     const createDto = {
@@ -218,8 +212,6 @@ describe('AdminService', () => {
     });
   });
 
-  // updateUser
-
   describe('updateUser', () => {
     it('updates and returns the user', async () => {
       const updated = { ...mockUser, firstName: 'Updated' };
@@ -243,8 +235,8 @@ describe('AdminService', () => {
 
     it('throws ConflictException when the new email is taken by another user', async () => {
       mockPrisma.user.findUnique
-        .mockResolvedValueOnce(mockUser) // find current user
-        .mockResolvedValueOnce({ id: 'other-user' }); // email conflict check
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce({ id: 'other-user' });
 
       await expect(
         service.updateUser('user-1', { email: 'taken@example.com' } as any),
@@ -269,8 +261,6 @@ describe('AdminService', () => {
     });
   });
 
-  // deleteUser
-
   describe('deleteUser', () => {
     it('deletes user and returns success', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
@@ -293,8 +283,6 @@ describe('AdminService', () => {
     });
   });
 
-  // deleteRoom
-
   describe('deleteRoom', () => {
     const mockRoom = { id: 'room-1', name: 'Room A' };
 
@@ -315,8 +303,6 @@ describe('AdminService', () => {
       );
     });
   });
-
-  // deletePatient
 
   describe('deletePatient', () => {
     const mockPatient = { id: 'patient-1', firstName: 'Alice' };
@@ -339,14 +325,12 @@ describe('AdminService', () => {
     });
   });
 
-  // getDashboardStats
-
   describe('getDashboardStats', () => {
     it('returns aggregate counts for the dashboard', async () => {
       mockPrisma.user.count
-        .mockResolvedValueOnce(10)  // total users
-        .mockResolvedValueOnce(7)   // caregivers
-        .mockResolvedValueOnce(1);  // admins
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(7)
+        .mockResolvedValueOnce(1);
       mockPrisma.patient.count.mockResolvedValue(5);
       mockPrisma.room.count.mockResolvedValue(3);
       mockPrisma.thread.count.mockResolvedValue(12);

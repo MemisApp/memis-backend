@@ -76,8 +76,6 @@ describe('MessagesService', () => {
     createdAt: new Date(),
   };
 
-  // listByThread
-
   describe('listByThread', () => {
     it('returns paginated messages for a PUBLIC thread without membership check', async () => {
       mockPrisma.thread.findUnique.mockResolvedValue(publicThread);
@@ -133,8 +131,6 @@ describe('MessagesService', () => {
       );
     });
   });
-
-  // createInThread
 
   describe('createInThread', () => {
     const createDto = { content: 'Hello!' };
@@ -236,8 +232,6 @@ describe('MessagesService', () => {
     });
   });
 
-  // getById
-
   describe('getById', () => {
     it('returns a message from a PUBLIC thread without membership check', async () => {
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
@@ -287,15 +281,13 @@ describe('MessagesService', () => {
     });
   });
 
-  // updateById
-
   describe('updateById', () => {
     const updateDto = { content: 'Updated content' };
 
     it('allows the message author to update their message', async () => {
-      mockPrisma.message.findUnique.mockResolvedValue(mockMessage); // authorId === USER_ID
+      mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
       mockPrisma.thread.findUnique.mockResolvedValue(threadWithRoomId);
-      mockPrisma.roomMember.findUnique.mockResolvedValue(null); // not a room mod
+      mockPrisma.roomMember.findUnique.mockResolvedValue(null);
       mockPrisma.message.update.mockResolvedValue({
         ...mockMessage,
         content: 'Updated content',
@@ -410,8 +402,6 @@ describe('MessagesService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
-
-  // deleteById
 
   describe('deleteById', () => {
     it('allows the message author to delete their own message', async () => {

@@ -8,10 +8,6 @@ import {
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
 
-/**
- * Surfaces Prisma error codes in API responses and logs the full error server-side.
- * Helps debug production 500s (e.g. missing migrations on Render) without guessing.
- */
 @Catch(
   Prisma.PrismaClientKnownRequestError,
   Prisma.PrismaClientUnknownRequestError,
@@ -74,7 +70,6 @@ export class PrismaExceptionFilter implements ExceptionFilter {
           'Database is unavailable. Check DATABASE_URL and network access.',
       };
     }
-    // PrismaClientUnknownRequestError
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       code: 'UNKNOWN',
@@ -89,7 +84,6 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     message: string;
   } {
     const c = e.code;
-    // https://www.prisma.io/docs/reference/api-reference/error-reference
     switch (c) {
       case 'P2002':
         return {
@@ -116,8 +110,8 @@ export class PrismaExceptionFilter implements ExceptionFilter {
             'Could not connect to the database. Check DATABASE_URL and that the instance is up.',
         };
       case 'P2010':
-      case 'P2021': // table does not exist
-      case 'P2022': // column does not exist
+      case 'P2021':
+      case 'P2022':
         return {
           status: HttpStatus.INTERNAL_SERVER_ERROR,
           code: c,

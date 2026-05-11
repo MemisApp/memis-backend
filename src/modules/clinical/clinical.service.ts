@@ -89,14 +89,12 @@ export class ClinicalService {
       ...(input.metadata ?? {}),
     };
 
-    // Fire a real push notification to every registered device for this patient.
     if (input.patientId && !input.userId) {
       this.pushService
         .sendToPatient(input.patientId, input.title, input.body, data)
         .catch((err) => this.logger.error('Patient push failed', err));
     }
 
-    // Fire push to caregiver/doctor user if userId targeted
     if (input.userId) {
       this.pushService
         .sendToUser(input.userId, input.title, input.body, data)
@@ -112,10 +110,6 @@ export class ClinicalService {
     await this.pushService.registerUserToken(userId, token);
   }
 
-  /**
-   * Notify all caregivers (and the patient) about an event on a patient.
-   * Also creates AppNotification rows + push notifications.
-   */
   private async notifyCaregivers(
     patientId: string,
     title: string,
@@ -347,7 +341,6 @@ export class ClinicalService {
       if (mimeMatch?.[1]) mimeType = mimeMatch[1];
       approxBytes = Math.floor((payload.length * 3) / 4);
 
-      // Prevent oversized JSON payloads from stalling request handling.
       if (approxBytes > 2_500_000) {
         throw new BadRequestException(
           'Clock test image is too large. Please retry with a smaller image.',
@@ -915,9 +908,6 @@ export class ClinicalService {
     };
   }
 
-  // ─── Patient Chat ────────────────────────────────────────────────────────
-
-  /** List all rooms linked to this patient (created for their care team). */
   async getPatientRooms(patientId: string) {
     const rooms = await this.prisma.room.findMany({
       where: { patientId },
@@ -949,7 +939,6 @@ export class ClinicalService {
     return rooms;
   }
 
-  /** List threads in a patient-linked room. */
   async getPatientRoomThreads(patientId: string, roomId: string) {
     const room = await this.prisma.room.findFirst({ where: { id: roomId, patientId } });
     if (!room) throw new ForbiddenException('Room not accessible for this patient');
@@ -970,7 +959,6 @@ export class ClinicalService {
     });
   }
 
-  /** Get paginated messages in a thread (must belong to a patient room). */
   async getPatientThreadMessages(patientId: string, threadId: string, page = 1, pageSize = 50) {
     const thread = await this.prisma.thread.findFirst({
       where: { id: threadId, room: { patientId } },
@@ -995,7 +983,6 @@ export class ClinicalService {
     return { items, page, pageSize, total };
   }
 
-  /** Patient sends a message; notifies User members via AppNotification (no Expo for them). */
   async sendPatientMessage(patientId: string, threadId: string, content: string) {
     const trimmed = content.trim();
     if (!trimmed) throw new BadRequestException('EMPTY_CONTENT');
@@ -1019,13 +1006,11 @@ export class ClinicalService {
       },
     });
 
-    // Touch thread + room updatedAt so ordering works
     await Promise.all([
       this.prisma.thread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
       this.prisma.room.update({ where: { id: thread.room.id }, data: { updatedAt: new Date() } }),
     ]);
 
-    // Notify User members (doctor, caregiver) via in-app notification
     const patient = await this.prisma.patient.findUnique({
       where: { id: patientId },
       select: { firstName: true, lastName: true },
@@ -1045,10 +1030,6 @@ export class ClinicalService {
     return message;
   }
 
-  /**
-   * Find or create a dedicated doctor-patient room + thread.
-   * Returns the roomId and threadId to navigate to.
-   */
   async getOrCreateDoctorThread(patientId: string) {
     const assignment = await this.prisma.doctorPatient.findFirst({
       where: { patientId, status: DoctorPatientStatus.ACTIVE },
@@ -1061,7 +1042,6 @@ export class ClinicalService {
 
     const doctorId = assignment.doctor.id;
 
-    // Check if a room already exists that is linked to this patient and has this doctor as member
     const existingRoom = await this.prisma.room.findFirst({
       where: {
         patientId,
@@ -1074,14 +1054,12 @@ export class ClinicalService {
       const thread = existingRoom.threads[0];
       if (thread) return { roomId: existingRoom.id, threadId: thread.id };
 
-      // Room exists but no thread — create one
       const newThread = await this.prisma.thread.create({
         data: { roomId: existingRoom.id, title: 'Chat', createdById: doctorId },
       });
       return { roomId: existingRoom.id, threadId: newThread.id };
     }
 
-    // Create fresh room + thread
     const patient = await this.prisma.patient.findUnique({
       where: { id: patientId },
       select: { firstName: true, lastName: true },
@@ -1105,10 +1083,6 @@ export class ClinicalService {
     return { roomId: room.id, threadId: thread.id };
   }
 
-  /**
-   * Doctor: find OR create the room+thread shared with a specific patient.
-   * Allows doctors to initiate a chat without waiting for the patient to message first.
-   */
   async getDoctorPatientChatRoom(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
     await this.ensureDoctorPatientAccess(doctorId, patientId);
@@ -1167,7 +1141,6 @@ export class ClinicalService {
     return { roomId: room.id, threadId: thread.id };
   }
 
-  /** Returns the active assigned doctor for a patient, or null if none. */
   async getMyDoctor(patientId: string) {
     const assignment = await this.prisma.doctorPatient.findFirst({
       where: {

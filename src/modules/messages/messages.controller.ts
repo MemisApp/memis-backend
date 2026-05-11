@@ -94,7 +94,7 @@ export class MessagesController {
   ) {
     const userId = req.user.id;
     const pageNum = Math.max(1, page || 1);
-    const pageSizeNum = Math.min(Math.max(1, pageSize || 50), 100); // Clamp between 1-100
+    const pageSizeNum = Math.min(Math.max(1, pageSize || 50), 100);
 
     return this.messagesService.listByThread(
       userId,

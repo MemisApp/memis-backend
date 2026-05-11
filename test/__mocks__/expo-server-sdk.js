@@ -1,4 +1,4 @@
-// Manual mock for expo-server-sdk to avoid ESM/import.meta.url issues in Jest
+
 class Expo {
   static isExpoPushToken() {
     return true;

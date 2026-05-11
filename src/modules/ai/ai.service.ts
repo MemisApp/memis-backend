@@ -41,7 +41,6 @@ export class AiService {
     if (role === 'PATIENT') return userId;
     if (!requestedPatientId) return null;
 
-    // Doctors access their assigned patients
     if (role === 'DOCTOR' || role === 'ADMIN') {
       const doctorLink = await this.prisma.doctorPatient.findUnique({
         where: {
@@ -54,7 +53,6 @@ export class AiService {
       if (doctorLink) return requestedPatientId;
     }
 
-    // Caregivers access their linked patients
     const link = await this.prisma.patientCaregiver.findUnique({
       where: {
         patientId_caregiverId: {
@@ -158,7 +156,6 @@ export class AiService {
         normalizedQuery,
       );
 
-    // Also detect relation-based queries (e.g. "my mom", "her sister")
     const relationKeywords = [
       'mother',
       'father',
@@ -184,18 +181,15 @@ export class AiService {
       const fullName = contact.name.toLowerCase().trim();
       if (!fullName) return false;
 
-      // Strong match: full name appears as a phrase in the query.
       const fullNameRegex = new RegExp(`\\b${escapeRegExp(fullName)}\\b`, 'i');
       if (fullNameRegex.test(normalizedQuery)) return true;
 
-      // Match by relation label (e.g. user asks "my sister" and contact.relation === "SISTER")
       if (contact.relation) {
         const rel = contact.relation.toLowerCase();
         if (new RegExp(`\\b${escapeRegExp(rel)}\\b`, 'i').test(normalizedQuery))
           return true;
       }
 
-      // Fallback: all meaningful name tokens (≥4 chars) appear as whole words.
       const tokens = fullName.split(/\s+/).filter((t) => t.length >= 4);
       if (tokens.length < 2) return false;
       return tokens.every((token) =>
@@ -209,7 +203,6 @@ export class AiService {
       return [];
     }
 
-    // Prefer matches; fall back to emergency contacts, then first contact
     const selectedContacts =
       matches.length > 0
         ? matches.slice(0, 4)
@@ -324,7 +317,6 @@ export class AiService {
       .reverse()
       .find((m) => m.role === 'user')?.content;
 
-    // Fetch caregiver/doctor name to personalize the system prompt
     let caregiverName: string | null = null;
     if (role !== 'PATIENT') {
       const caller = await this.prisma.user.findUnique({

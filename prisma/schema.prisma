@@ -19,7 +19,7 @@ model User {
   title         String?
   passwordHash  String
   role          Role     @default(CAREGIVER)
-  expoPushToken String?  // For caregivers/doctors to receive push notifications
+  expoPushToken String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -98,7 +98,7 @@ model PairingCode {
   code      String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdBy String // caregiver user id
+  createdBy String
   createdAt DateTime  @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
@@ -107,7 +107,7 @@ model PairingCode {
 model Device {
   id               String    @id @default(cuid())
   patientId        String
-  platform         String // ios | android | web
+  platform         String
   devicePublicId   String
   deviceName       String?
   refreshTokenHash String?
@@ -125,12 +125,12 @@ model Device {
 model Reminder {
   id            String    @id @default(cuid())
   patientId     String
-  type          String // PILLS | DOOR_LOCK | TEETH | PET_CARE | CUSTOM
+  type          String
   title         String
   notes         String?
-  schedule      String? // HH:MM (time of day for recurring reminders)
-  recurrence    String    @default("DAILY") // ONCE | DAILY | WEEKLY | YEARLY
-  scheduledDate DateTime? // For ONCE/YEARLY: the specific date (YYYY-MM-DD)
+  schedule      String?
+  recurrence    String    @default("DAILY")
+  scheduledDate DateTime?
   isActive      Boolean   @default(true)
   lastFiredAt   DateTime?
   completed     Boolean   @default(false)
@@ -147,7 +147,7 @@ model Reminder {
 model Contact {
   id        String   @id @default(cuid())
   patientId String
-  relation  String // SISTER | SPOUSE | CHILD | FRIEND | OTHER
+  relation  String
   name      String
   phone     String
   photoUrl  String?

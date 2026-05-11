@@ -62,8 +62,6 @@ describe('AuthService', () => {
     jest.clearAllMocks();
   });
 
-  // register
-
   describe('register', () => {
     const dto = {
       email: 'Test@Example.COM',
@@ -163,8 +161,6 @@ describe('AuthService', () => {
     });
   });
 
-  // login
-
   describe('login', () => {
     const mockDbUser = {
       id: 'user-1',
@@ -212,8 +208,6 @@ describe('AuthService', () => {
     });
   });
 
-  // getMe
-
   describe('getMe', () => {
     it('returns the user profile for the given id', async () => {
       const mockUser = { id: 'user-1', email: 'test@example.com' };
@@ -227,8 +221,6 @@ describe('AuthService', () => {
       );
     });
   });
-
-  // updateMe
 
   describe('updateMe', () => {
     it('updates and returns the user profile', async () => {
@@ -245,8 +237,6 @@ describe('AuthService', () => {
       );
     });
   });
-
-  // logout
 
   describe('logout', () => {
     it('deletes the specified session', async () => {
@@ -271,8 +261,6 @@ describe('AuthService', () => {
       });
     });
   });
-
-  // patientLogin
 
   describe('patientLogin', () => {
     const deviceInfo = {
@@ -339,8 +327,6 @@ describe('AuthService', () => {
       );
     });
   });
-
-  // deviceLogin
 
   describe('deviceLogin', () => {
     it('returns patient and tokens for a known device', async () => {

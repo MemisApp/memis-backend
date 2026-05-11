@@ -57,8 +57,6 @@ describe('ContactsService', () => {
     updatedAt: new Date(),
   };
 
-  // findByPatient
-
   describe('findByPatient', () => {
     it('returns contacts when caregiver has any relation to patient', async () => {
       mockPrisma.patientCaregiver.findUnique.mockResolvedValue(ownerRelation);
@@ -98,8 +96,6 @@ describe('ContactsService', () => {
       expect(result).toEqual([mockContact]);
     });
   });
-
-  // create
 
   describe('create', () => {
     const createDto = {
@@ -158,8 +154,6 @@ describe('ContactsService', () => {
     });
   });
 
-  // findOne
-
   describe('findOne', () => {
     it('returns the contact when user has access to the patient', async () => {
       mockPrisma.contact.findUnique.mockResolvedValue(mockContact);
@@ -187,8 +181,6 @@ describe('ContactsService', () => {
       );
     });
   });
-
-  // update
 
   describe('update', () => {
     const updateDto = { name: 'Updated Name' };
@@ -257,8 +249,6 @@ describe('ContactsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
-
-  // remove
 
   describe('remove', () => {
     it('deletes the contact and returns success for an OWNER', async () => {

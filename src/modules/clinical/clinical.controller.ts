@@ -271,8 +271,6 @@ export class ClinicalController {
     return this.clinicalService.getMyDoctor(req.user.id);
   }
 
-  // ─── Patient Chat ────────────────────────────────────────────────────────
-
   @Get('/patient/rooms')
   @ApiOperation({ summary: 'List care rooms linked to the patient' })
   getPatientRooms(@Req() req: AuthenticatedRequest) {

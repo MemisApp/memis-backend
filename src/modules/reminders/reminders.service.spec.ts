@@ -59,8 +59,6 @@ describe('RemindersService', () => {
     updatedAt: new Date(),
   });
 
-  // create
-
   describe('create', () => {
     const createDto = { type: 'MEDICATION', title: 'Take pills' };
 
@@ -123,8 +121,6 @@ describe('RemindersService', () => {
     });
   });
 
-  // findByPatient
-
   describe('findByPatient', () => {
     it('returns reminders for a caregiver with access', async () => {
       const mockReminder = makeReminder();
@@ -168,12 +164,10 @@ describe('RemindersService', () => {
 
       const result = await service.findByPatient(PATIENT_ID, USER_ID);
 
-      expect(result[0].completed).toBe(false); // completed yesterday → reset
-      expect(result[1].completed).toBe(true);  // completed today → still done
+      expect(result[0].completed).toBe(false);
+      expect(result[1].completed).toBe(true);
     });
   });
-
-  // findOne
 
   describe('findOne', () => {
     it('returns the reminder when user has access', async () => {
@@ -203,8 +197,6 @@ describe('RemindersService', () => {
       );
     });
   });
-
-  // update
 
   describe('update', () => {
     const updateDto = { title: 'Updated title' };
@@ -248,8 +240,6 @@ describe('RemindersService', () => {
     });
   });
 
-  // remove
-
   describe('remove', () => {
     it('deletes the reminder and returns success', async () => {
       mockPrisma.reminder.findUnique.mockResolvedValue({
@@ -285,8 +275,6 @@ describe('RemindersService', () => {
     });
   });
 
-  // markCompleted  
-
   describe('markCompleted', () => {
     it('marks the reminder as completed and returns it', async () => {
       const mockReminder = makeReminder();
@@ -319,7 +307,6 @@ describe('RemindersService', () => {
       mockPrisma.reminder.findUnique.mockResolvedValue(mockReminder);
       mockPrisma.reminder.update.mockResolvedValue(updatedReminder);
 
-      // userId === patientId → hasPatientAccess returns true without DB call
       const result = await service.markCompleted(REMINDER_ID, PATIENT_ID);
 
       expect(result.completed).toBe(true);

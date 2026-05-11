@@ -239,10 +239,9 @@ export class AuthService {
   }
 
   async patientLogin(pairingCode: string, deviceInfo: DeviceInfo) {
-    // Find valid pairing code
     const pairing = await this.prisma.pairingCode.findFirst({
       where: {
-        code: pairingCode.replace('-', ''), // Remove dash if provided
+        code: pairingCode.replace('-', ''),
         usedAt: null,
         expiresAt: { gt: new Date() },
       },
@@ -266,7 +265,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired pairing code');
     }
 
-    // Check if device already exists for this patient
     let device = await this.prisma.device.findUnique({
       where: {
         patientId_devicePublicId: {
@@ -277,31 +275,27 @@ export class AuthService {
     });
 
     if (!device) {
-      // Create new device
       device = await this.prisma.device.create({
         data: {
           patientId: pairing.patientId,
           platform: deviceInfo.platform,
           devicePublicId: deviceInfo.deviceId,
           deviceName: deviceInfo.deviceName,
-          isPrimary: false, // User can set primary later
+          isPrimary: false,
         },
       });
     }
 
-    // Mark pairing code as used
     await this.prisma.pairingCode.update({
       where: { id: pairing.id },
       data: { usedAt: new Date() },
     });
 
-    // Update device last seen
     await this.prisma.device.update({
       where: { id: device.id },
       data: { lastSeenAt: new Date() },
     });
 
-    // Generate tokens for patient
     const accessToken = await this.signAccessToken(
       pairing.patientId,
       'PATIENT',
@@ -321,9 +315,6 @@ export class AuthService {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deviceLogin(deviceToken: string, _pinCode?: string) {
-    // For now, we'll use deviceToken as deviceId (simplified)
-    // In production, you'd want to implement proper device tokens
-    // _pinCode is reserved for future PIN-based authentication
     const device = await this.prisma.device.findUnique({
       where: { id: deviceToken },
       include: {
@@ -346,13 +337,11 @@ export class AuthService {
       throw new UnauthorizedException('Device not found or not authorized');
     }
 
-    // Update last seen
     await this.prisma.device.update({
       where: { id: device.id },
       data: { lastSeenAt: new Date() },
     });
 
-    // Generate tokens
     const accessToken = await this.signAccessToken(device.patientId, 'PATIENT');
     const refreshToken = await this.signPatientRefreshToken(
       device.patientId,
@@ -382,7 +371,6 @@ export class AuthService {
 
   async logout(userId: string, sessionId?: string) {
     if (sessionId) {
-      // Logout specific session
       await this.prisma.userSession.deleteMany({
         where: {
           id: sessionId,
@@ -390,7 +378,6 @@ export class AuthService {
         },
       });
     } else {
-      // Logout all sessions for the user
       await this.prisma.userSession.deleteMany({
         where: {
           userId,

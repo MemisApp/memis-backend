@@ -13,7 +13,6 @@ export class ContactsService {
   constructor(private prisma: PrismaService) {}
 
   async create(patientId: string, userId: string, dto: CreateContactDto) {
-    // Check if user has edit access to this patient
     const hasEditAccess = await this.hasPatientEditAccess(userId, patientId);
     if (!hasEditAccess) {
       throw new ForbiddenException(
@@ -48,7 +47,6 @@ export class ContactsService {
   }
 
   async findByPatient(patientId: string, userId: string) {
-    // Check if user has access to this patient
     const hasAccess = await this.hasPatientAccess(userId, patientId);
     if (!hasAccess) {
       throw new ForbiddenException('No access to this patient');
@@ -94,7 +92,6 @@ export class ContactsService {
       throw new NotFoundException('Contact not found');
     }
 
-    // Check access to the patient
     const hasAccess = await this.hasPatientAccess(userId, contact.patientId);
     if (!hasAccess) {
       throw new ForbiddenException('No access to this contact');
@@ -113,7 +110,6 @@ export class ContactsService {
       throw new NotFoundException('Contact not found');
     }
 
-    // Check edit access to the patient
     const hasEditAccess = await this.hasPatientEditAccess(
       userId,
       contact.patientId,
@@ -162,7 +158,6 @@ export class ContactsService {
       throw new NotFoundException('Contact not found');
     }
 
-    // Check edit access to the patient
     const hasEditAccess = await this.hasPatientEditAccess(
       userId,
       contact.patientId,
@@ -184,7 +179,6 @@ export class ContactsService {
     userId: string,
     patientId: string,
   ): Promise<boolean> {
-    // Allow the patient themselves to access their own contacts
     if (userId === patientId) {
       return true;
     }

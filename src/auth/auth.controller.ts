@@ -59,7 +59,6 @@ export class AuthController {
     return {
       user,
       accessToken,
-      // refreshToken,
       sessionId,
     };
   }
@@ -125,7 +124,6 @@ export class AuthController {
     return {
       user,
       accessToken,
-      // refreshToken,
       sessionId,
     };
   }
@@ -293,7 +291,6 @@ export class AuthController {
     const userId = req.user.id;
     const result = await this.auth.logout(userId, body?.sessionId);
 
-    // Clear the refresh token cookie
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: true,

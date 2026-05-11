@@ -28,8 +28,6 @@ export class FcmService implements OnModuleInit {
       const keyJson = this.config.get<string>('FCM_SERVICE_ACCOUNT_JSON');
       if (keyJson) {
         const raw = JSON.parse(keyJson) as Record<string, string>;
-        // Render and other hosts escape \n in env vars as literal \\n.
-        // firebase-admin needs real newlines in the PEM private key.
         if (raw.private_key && typeof raw.private_key === 'string') {
           raw.private_key = raw.private_key.replace(/\\n/g, '\n');
         }
@@ -75,8 +73,8 @@ export class FcmService implements OnModuleInit {
 
     const stringData: Record<string, string> = {
       title,
-      message: body, // Expo expects the text body in 'message'
-      body: JSON.stringify(data || {}), // Expo expects custom data stringified in 'body'
+      message: body,
+      body: JSON.stringify(data || {}),
       channelId,
     };
 

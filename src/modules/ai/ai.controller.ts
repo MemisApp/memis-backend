@@ -36,7 +36,11 @@ export class AiController {
     @Req() req: AuthenticatedRequest,
     @Query('patientId') patientId?: string,
   ) {
-    return this.aiService.listConversations(req.user.id, req.user.role, patientId);
+    return this.aiService.listConversations(
+      req.user.id,
+      req.user.role,
+      patientId,
+    );
   }
 
   @Get('/conversations/:conversationId/messages')
@@ -58,20 +62,16 @@ export class AiController {
     @Req() req: AuthenticatedRequest,
     @Param('conversationId') conversationId: string,
   ) {
-    return this.aiService.deleteConversation(req.user.id, req.user.role, conversationId);
+    return this.aiService.deleteConversation(
+      req.user.id,
+      req.user.role,
+      conversationId,
+    );
   }
 
-  /**
-   * Non-streaming endpoint used by Android clients (and any client that
-   * cannot consume SSE).  Returns the full assistant reply as plain JSON
-   * once Gemini finishes, so there is no buffering/streaming issue.
-   */
   @Post('/chat')
   @ApiOperation({ summary: 'Non-streaming AI chat (for Android / fallback)' })
-  async chat(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: StreamChatDto,
-  ) {
+  async chat(@Req() req: AuthenticatedRequest, @Body() dto: StreamChatDto) {
     const conversation = await this.aiService.upsertConversation(
       req.user.id,
       req.user.role,
@@ -153,7 +153,6 @@ export class AiController {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    // Disable Nginx / Render.com proxy buffering so chunks arrive in real-time
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
@@ -222,9 +221,7 @@ export class AiController {
             assistantText += text;
             send({ type: 'chunk', text });
           }
-        } catch {
-          // Ignore malformed streaming fragments
-        }
+        } catch {}
       }
     }
 

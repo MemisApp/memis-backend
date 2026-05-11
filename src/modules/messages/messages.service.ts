@@ -26,17 +26,12 @@ export class MessagesService {
     page: number = 1,
     pageSize: number = 50,
   ) {
-    // Load thread → roomId and room visibility
     const thread = await this.getThreadWithRoomVisibility(threadId);
     if (!thread) {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Allow access to messages in public rooms for everyone
-    if (thread.room.visibility === 'PUBLIC') {
-      // Continue to fetch messages
-    } else {
-      // For private rooms, check membership
+    if (thread.room.visibility !== 'PUBLIC') {
       const isMember = await this.isRoomMember(userId, thread.roomId);
       if (!isMember) {
         throw new ForbiddenException('NOT_ROOM_MEMBER');
@@ -89,24 +84,18 @@ export class MessagesService {
     threadId: string,
     dto: CreateMessageDto,
   ) {
-    // Load thread → roomId and room visibility
     const thread = await this.getThreadWithRoomVisibility(threadId);
     if (!thread) {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Allow message creation in public rooms for everyone
-    if (thread.room.visibility === 'PUBLIC') {
-      // Continue to create message
-    } else {
-      // For private rooms, check membership
+    if (thread.room.visibility !== 'PUBLIC') {
       const isMember = await this.isRoomMember(userId, thread.roomId);
       if (!isMember) {
         throw new ForbiddenException('NOT_ROOM_MEMBER');
       }
     }
 
-    // Trim content and validate
     const trimmedContent = dto.content.trim();
     if (!trimmedContent) {
       throw new BadRequestException('EMPTY_CONTENT');
@@ -131,7 +120,6 @@ export class MessagesService {
       },
     });
 
-    // Notify patient (if linked) and other room members (caregivers/doctors)
     this.notifyRoomMembers(
       thread.roomId,
       threadId,
@@ -143,7 +131,6 @@ export class MessagesService {
     return message;
   }
 
-  /** Fire AppNotification + Expo push to the patient and other user members of the room. */
   private async notifyRoomMembers(
     roomId: string,
     threadId: string,
@@ -210,7 +197,6 @@ export class MessagesService {
   }
 
   async getById(userId: string, messageId: string) {
-    // Load message → threadId → roomId
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
@@ -227,18 +213,15 @@ export class MessagesService {
       throw new NotFoundException('MESSAGE_NOT_FOUND');
     }
 
-    // Load thread to get roomId and room visibility
     const thread = await this.getThreadWithRoomVisibility(message.threadId);
     if (!thread) {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Allow access to messages in public rooms for everyone
     if (thread.room.visibility === 'PUBLIC') {
       return message;
     }
 
-    // For private rooms, check membership
     const isMember = await this.isRoomMember(userId, thread.roomId);
     if (!isMember) {
       throw new ForbiddenException('NOT_ROOM_MEMBER');
@@ -253,7 +236,6 @@ export class MessagesService {
     messageId: string,
     dto: UpdateMessageDto,
   ) {
-    // Load message (authorId) → thread → roomId
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
@@ -268,13 +250,11 @@ export class MessagesService {
       throw new NotFoundException('MESSAGE_NOT_FOUND');
     }
 
-    // Load thread to get roomId
     const thread = await this.getThreadWithRoomId(message.threadId);
     if (!thread) {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Authorize: author OR room OWNER/MODERATOR OR ADMIN
     const isAuthor = message.authorId === userId;
     const roomRole = await this.getRoomMemberRole(userId, thread.roomId);
     const canModerate = this.canModerate(roomRole);
@@ -284,7 +264,6 @@ export class MessagesService {
       throw new ForbiddenException('INSUFFICIENT_PRIVILEGES');
     }
 
-    // Validate content if provided
     let trimmedContent = dto.content;
     if (dto.content !== undefined) {
       trimmedContent = dto.content.trim();
@@ -311,7 +290,6 @@ export class MessagesService {
   }
 
   async deleteById(userId: string, userRole: string, messageId: string) {
-    // Load message (authorId) → thread → roomId
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
@@ -325,13 +303,11 @@ export class MessagesService {
       throw new NotFoundException('MESSAGE_NOT_FOUND');
     }
 
-    // Load thread to get roomId
     const thread = await this.getThreadWithRoomId(message.threadId);
     if (!thread) {
       throw new NotFoundException('THREAD_NOT_FOUND');
     }
 
-    // Authorize: author OR room OWNER/MODERATOR OR ADMIN
     const isAuthor = message.authorId === userId;
     const roomRole = await this.getRoomMemberRole(userId, thread.roomId);
     const canModerate = this.canModerate(roomRole);

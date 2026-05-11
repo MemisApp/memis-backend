@@ -8,8 +8,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 describe('PatientsService', () => {
   let service: PatientsService;
 
-  // The $transaction mock executes the callback with the same mock object so
-  // that inner tx.patient.create / tx.contact.create calls are intercepted.
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     patient: {
@@ -72,13 +70,10 @@ describe('PatientsService', () => {
   const editorRelation = { role: CaregiverRole.EDITOR };
   const viewerRelation = { role: CaregiverRole.VIEWER };
 
-  // create
-
   describe('create', () => {
     const createDto = { firstName: 'Alice', lastName: 'Smith' };
 
     beforeEach(() => {
-      // Simulate $transaction calling the callback with mockPrisma as tx
       mockPrisma.$transaction.mockImplementation((cb: (tx: typeof mockPrisma) => Promise<unknown>) =>
         cb(mockPrisma),
       );
@@ -88,7 +83,6 @@ describe('PatientsService', () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockCaregiver);
       mockPrisma.patient.create.mockResolvedValue(mockPatient);
       mockPrisma.contact.create.mockResolvedValue({});
-      // hasPatientAccess is called inside generatePairingCode
       mockPrisma.patientCaregiver.findUnique.mockResolvedValue(ownerRelation);
       mockPrisma.pairingCode.create.mockResolvedValue({
         id: 'code-1',
@@ -113,11 +107,9 @@ describe('PatientsService', () => {
     });
   });
 
-  // findByCaregiver
-
   describe('findByCaregiver', () => {
     it('returns a list of patients with caregiver metadata', async () => {
-      mockPrisma.patientCaregiver.findUnique; // not used here
+      mockPrisma.patientCaregiver.findUnique;
       const mockRelations = [
         {
           patient: mockPatient,
@@ -125,7 +117,6 @@ describe('PatientsService', () => {
           createdAt: new Date('2024-01-01'),
         },
       ];
-      // findByCaregiver uses patientCaregiver.findMany
       (mockPrisma as any).patientCaregiver.findMany = jest
         .fn()
         .mockResolvedValue(mockRelations);
@@ -136,8 +127,6 @@ describe('PatientsService', () => {
       expect(result[0].caregiverRole).toBe(CaregiverRole.OWNER);
     });
   });
-
-  // findOne
 
   describe('findOne', () => {
     it('returns the patient when the user has access', async () => {
@@ -166,8 +155,6 @@ describe('PatientsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
-
-  // update
 
   describe('update', () => {
     const updateDto = { firstName: 'Updated' };
@@ -221,11 +208,8 @@ describe('PatientsService', () => {
     });
   });
 
-  // remove
-
   describe('remove', () => {
     it('allows an ADMIN to delete any patient', async () => {
-      // isPatientOwner check is skipped because isAdmin = true
       mockPrisma.patient.delete.mockResolvedValue({});
 
       const result = await service.remove(PATIENT_ID, 'admin-id', Role.ADMIN);
@@ -266,8 +250,6 @@ describe('PatientsService', () => {
     });
   });
 
-  // generatePairingCode
-
   describe('generatePairingCode', () => {
     it('creates and returns a pairing code for a user with access', async () => {
       const mockCode = {
@@ -296,8 +278,6 @@ describe('PatientsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
-
-  // revokePairingCode
 
   describe('revokePairingCode', () => {
     const mockCode = {

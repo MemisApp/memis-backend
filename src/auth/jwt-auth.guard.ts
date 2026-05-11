@@ -42,13 +42,11 @@ export class JwtAuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       });
 
-      // Add user info to request object
       request.user = {
         id: payload.sub,
         role: payload.role,
       };
-    } catch (error) {
-      console.error(error);
+    } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
 

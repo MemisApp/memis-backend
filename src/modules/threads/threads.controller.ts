@@ -93,7 +93,7 @@ export class ThreadsController {
   ) {
     const userId = req.user.id;
     const pageNum = Math.max(1, page || 1);
-    const pageSizeNum = Math.min(Math.max(1, pageSize || 20), 100); // Clamp between 1-100
+    const pageSizeNum = Math.min(Math.max(1, pageSize || 20), 100);
 
     return this.threadsService.listByRoom(userId, roomId, pageNum, pageSizeNum);
   }

@@ -9,7 +9,6 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // users
   const password = 'Memis123!';
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -37,7 +36,6 @@ async function main() {
     },
   });
 
-  // a room created by caregiver
   const room = await prisma.room.create({
     data: {
       name: 'Family Room',
@@ -52,7 +50,6 @@ async function main() {
     },
   });
 
-  // a thread in that room
   const thread = await prisma.thread.create({
     data: {
       roomId: room.id,
@@ -61,7 +58,6 @@ async function main() {
     },
   });
 
-  // a couple of messages
   await prisma.message.createMany({
     data: [
       {

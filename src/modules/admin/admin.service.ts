@@ -18,8 +18,6 @@ export class AdminService {
     return bcrypt.hash(data, 12);
   }
 
-  // ==================== USER MANAGEMENT ====================
-
   async findAllUsers(page: number = 1, pageSize: number = 20, search?: string) {
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
     const skip = (page - 1) * pageSizeNum;
@@ -193,8 +191,6 @@ export class AdminService {
 
     return { success: true };
   }
-
-  // ==================== LIST ALL ENTITIES ====================
 
   async findAllRooms(page: number = 1, pageSize: number = 20) {
     const pageSizeNum = Math.min(Math.max(1, pageSize), 100);
@@ -399,8 +395,6 @@ export class AdminService {
     };
   }
 
-  // ==================== ROOM/THREAD/MESSAGE/PATIENT MANAGEMENT ====================
-
   async updateRoom(
     roomId: string,
     data: { name?: string; visibility?: string },
@@ -466,8 +460,6 @@ export class AdminService {
     });
     return { success: true };
   }
-
-  // ==================== DASHBOARD STATISTICS ====================
 
   async getDashboardStats() {
     const [

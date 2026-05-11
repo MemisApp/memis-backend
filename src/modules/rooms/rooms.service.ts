@@ -20,7 +20,6 @@ export class RoomsService {
       this.prisma.room.findMany({
         where: {
           OR: [
-            // Rooms where user is a member
             {
               members: {
                 some: {
@@ -28,7 +27,6 @@ export class RoomsService {
                 },
               },
             },
-            // Public rooms (regardless of membership)
             {
               visibility: 'PUBLIC',
             },
@@ -51,7 +49,6 @@ export class RoomsService {
       this.prisma.room.count({
         where: {
           OR: [
-            // Rooms where user is a member
             {
               members: {
                 some: {
@@ -59,7 +56,6 @@ export class RoomsService {
                 },
               },
             },
-            // Public rooms (regardless of membership)
             {
               visibility: 'PUBLIC',
             },
@@ -114,7 +110,6 @@ export class RoomsService {
   }
 
   async createRoom(userId: string, dto: CreateRoomDto) {
-    // Check if user already has a room with this name
     const existingRoom = await this.prisma.room.findFirst({
       where: {
         name: dto.name,
@@ -166,12 +161,10 @@ export class RoomsService {
       throw new NotFoundException('ROOM_NOT_FOUND');
     }
 
-    // Allow access to public rooms for everyone
     if (room.visibility === 'PUBLIC') {
       return room;
     }
 
-    // For private rooms, check if user is a member
     const isMember = await this.isMember(userId, roomId);
     if (!isMember) {
       throw new ForbiddenException('NOT_ROOM_MEMBER');
@@ -198,7 +191,6 @@ export class RoomsService {
       throw new ForbiddenException('FORBIDDEN');
     }
 
-    // Check name conflict if name is being updated
     if (dto.name && dto.name !== room.name) {
       const existingRoom = await this.prisma.room.findFirst({
         where: {
@@ -319,7 +311,6 @@ export class RoomsService {
     targetUserId: string,
     role: string,
   ) {
-    // Check if user is OWNER or MODERATOR of the room
     const userRole = await this.getRoomMemberRole(userId, roomId);
     if (!userRole || !this.canModerate(userRole)) {
       throw new ForbiddenException(
@@ -327,7 +318,6 @@ export class RoomsService {
       );
     }
 
-    // Check if target user exists
     const targetUser = await this.prisma.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, firstName: true, lastName: true, email: true },
@@ -337,7 +327,6 @@ export class RoomsService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if user is already a member
     const existingMember = await this.prisma.roomMember.findUnique({
       where: {
         roomId_userId: {
@@ -378,7 +367,6 @@ export class RoomsService {
   }
 
   async getMembers(roomId: string, userId: string) {
-    // Check if user is member of the room
     const isMember = await this.isMember(userId, roomId);
     if (!isMember) {
       throw new ForbiddenException('NOT_ROOM_MEMBER');
@@ -397,7 +385,7 @@ export class RoomsService {
         },
       },
       orderBy: [
-        { role: 'asc' }, // OWNER, MODERATOR, MEMBER
+        { role: 'asc' },
         { joinedAt: 'asc' },
       ],
     });
@@ -411,7 +399,6 @@ export class RoomsService {
   }
 
   async removeMember(roomId: string, userId: string, targetUserId: string) {
-    // Check if user is OWNER or MODERATOR of the room
     const userRole = await this.getRoomMemberRole(userId, roomId);
     if (!userRole || !this.canModerate(userRole)) {
       throw new ForbiddenException(
@@ -419,13 +406,11 @@ export class RoomsService {
       );
     }
 
-    // Cannot remove room owner (unless removing themselves)
     const targetMemberRole = await this.getRoomMemberRole(targetUserId, roomId);
     if (targetMemberRole === 'OWNER' && userId !== targetUserId) {
       throw new ForbiddenException('Cannot remove room owner');
     }
 
-    // Check if member exists
     const member = await this.prisma.roomMember.findUnique({
       where: {
         roomId_userId: {

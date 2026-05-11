@@ -54,20 +54,19 @@ describe('AiService', () => {
     jest.clearAllMocks();
   });
 
-  // Shared helpers
   const USER_ID = 'user-1';
   const PATIENT_ID = 'patient-1';
   const CONV_ID = 'conv-1';
 
-  const makeMessages = (text = 'Hello') => [{ role: 'user' as const, content: text }];
+  const makeMessages = (text = 'Hello') => [
+    { role: 'user' as const, content: text },
+  ];
 
   const emptyClinical = () => {
     mockPrisma.anamneze.findMany.mockResolvedValue([]);
     mockPrisma.mMSETest.findMany.mockResolvedValue([]);
     mockPrisma.treatment.findMany.mockResolvedValue([]);
   };
-
-  // createStreamContext
 
   describe('createStreamContext', () => {
     it('throws InternalServerErrorException when GEMINI_API_KEY is missing', async () => {
@@ -82,7 +81,9 @@ describe('AiService', () => {
 
     it('returns stream context with API key and system instruction', async () => {
       mockConfig.get.mockReturnValue('test-api-key');
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.contact.findMany.mockResolvedValue([]);
       emptyClinical();
 
@@ -91,7 +92,11 @@ describe('AiService', () => {
         patientId: PATIENT_ID,
       };
 
-      const result = await service.createStreamContext(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.geminiApiKey).toBe('test-api-key');
       expect(result.systemInstruction).toContain('MemiMinds');
@@ -106,9 +111,12 @@ describe('AiService', () => {
 
       const dto = { messages: makeMessages() };
 
-      const result = await service.createStreamContext(USER_ID, 'PATIENT', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'PATIENT',
+        dto as any,
+      );
 
-      // No caregiver / doctor link lookup needed for PATIENT role
       expect(mockPrisma.patientCaregiver.findUnique).not.toHaveBeenCalled();
       expect(result.geminiApiKey).toBe('test-api-key');
     });
@@ -126,7 +134,9 @@ describe('AiService', () => {
 
     it('includes matched contacts in the result when names appear in user message', async () => {
       mockConfig.get.mockReturnValue('test-api-key');
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       const mockContacts = [
         {
           id: 'c-1',
@@ -144,7 +154,11 @@ describe('AiService', () => {
         patientId: PATIENT_ID,
       };
 
-      const result = await service.createStreamContext(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.matchedContacts).toHaveLength(1);
       expect(result.matchedContacts[0].name).toBe('Alice Johnson');
@@ -152,9 +166,17 @@ describe('AiService', () => {
 
     it('returns no matched contacts when no name appears in user message', async () => {
       mockConfig.get.mockReturnValue('test-api-key');
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.contact.findMany.mockResolvedValue([
-        { id: 'c-1', name: 'Alice Johnson', description: null, photoUrl: null, phone: null },
+        {
+          id: 'c-1',
+          name: 'Alice Johnson',
+          description: null,
+          photoUrl: null,
+          phone: null,
+        },
       ]);
       emptyClinical();
 
@@ -163,14 +185,20 @@ describe('AiService', () => {
         patientId: PATIENT_ID,
       };
 
-      const result = await service.createStreamContext(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.matchedContacts).toHaveLength(0);
     });
 
     it('includes clinical summary in system instruction when patient has data', async () => {
       mockConfig.get.mockReturnValue('test-api-key');
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.contact.findMany.mockResolvedValue([]);
       mockPrisma.anamneze.findMany.mockResolvedValue([
         { content: 'Memory loss onset 2022', updatedAt: new Date() },
@@ -180,27 +208,34 @@ describe('AiService', () => {
 
       const dto = { messages: makeMessages(), patientId: PATIENT_ID };
 
-      const result = await service.createStreamContext(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.systemInstruction).toContain('Memory loss onset 2022');
     });
 
     it('sets lastUserMessage to empty string when no user message is present', async () => {
       mockConfig.get.mockReturnValue('test-api-key');
-      // No patientId so no patient context lookup
       const dto = { messages: [{ role: 'assistant', content: 'Hello' }] };
 
-      const result = await service.createStreamContext(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.createStreamContext(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.lastUserMessage).toBe('');
     });
   });
 
-  // upsertConversation
-
   describe('upsertConversation', () => {
     it('creates a new conversation when no conversationId is provided', async () => {
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.aiConversation.create.mockResolvedValue({
         id: CONV_ID,
         patientId: PATIENT_ID,
@@ -211,14 +246,20 @@ describe('AiService', () => {
         patientId: PATIENT_ID,
       };
 
-      const result = await service.upsertConversation(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.upsertConversation(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.id).toBe(CONV_ID);
       expect(mockPrisma.aiConversation.create).toHaveBeenCalled();
     });
 
     it('returns existing conversation when a valid conversationId is provided', async () => {
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.aiConversation.findFirst.mockResolvedValue({
         id: CONV_ID,
         patientId: PATIENT_ID,
@@ -230,14 +271,20 @@ describe('AiService', () => {
         patientId: PATIENT_ID,
       };
 
-      const result = await service.upsertConversation(USER_ID, 'CAREGIVER', dto as any);
+      const result = await service.upsertConversation(
+        USER_ID,
+        'CAREGIVER',
+        dto as any,
+      );
 
       expect(result.id).toBe(CONV_ID);
       expect(mockPrisma.aiConversation.create).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when conversationId does not belong to user', async () => {
-      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockPrisma.patientCaregiver.findUnique.mockResolvedValue({
+        role: 'OWNER',
+      });
       mockPrisma.aiConversation.findFirst.mockResolvedValue(null);
 
       const dto = {
@@ -306,8 +353,6 @@ describe('AiService', () => {
     });
   });
 
-  // saveExchange
-
   describe('saveExchange', () => {
     beforeEach(() => {
       mockPrisma.$transaction.mockImplementation(
@@ -366,8 +411,6 @@ describe('AiService', () => {
     });
   });
 
-  // listConversations
-
   describe('listConversations', () => {
     it('returns conversations owned by the user with correct role filter', async () => {
       const mockConvs = [{ id: CONV_ID, title: 'Chat 1' }];
@@ -399,8 +442,6 @@ describe('AiService', () => {
     });
   });
 
-  // getConversationMessages
-
   describe('getConversationMessages', () => {
     it('returns messages for a valid conversation', async () => {
       const mockMsgs = [{ id: 'msg-1', role: 'USER', content: 'Hello' }];
@@ -424,8 +465,6 @@ describe('AiService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
-
-  // deleteConversation
 
   describe('deleteConversation', () => {
     it('deletes the conversation and returns success', async () => {

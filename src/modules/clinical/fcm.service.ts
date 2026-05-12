@@ -80,9 +80,26 @@ export class FcmService implements OnModuleInit {
 
     const messagePayload: admin.messaging.Message = {
       token: fcmToken,
+      notification: {
+        title,
+        body,
+      },
       data: stringData,
       android: {
         priority: 'high',
+        notification: {
+          channelId,
+          sound: 'default',
+          defaultVibrateTimings: true,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
       },
     };
 

@@ -8,6 +8,7 @@ import {
   IsIn,
   ValidateIf,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -51,13 +52,28 @@ export class RegisterDto {
   @Transform(({ value }) => (value as string)?.trim())
   lastName!: string;
 
+  // SECURITY: Doctor self-registration is DISABLED for launch. Allowing anyone
+  // to self-register as a DOCTOR would grant clinical/PHI access without any
+  // verification of medical credentials. Doctors must be provisioned by an
+  // admin. To re-enable later, add 'DOCTOR' back to the @IsIn list and the
+  // union type below (and re-enable the doctor option in the frontend).
   @ApiProperty({
-    enum: ['CAREGIVER', 'DOCTOR'],
+    enum: ['CAREGIVER' /* , 'DOCTOR' */],
     example: 'CAREGIVER',
   })
   @IsString()
-  @IsIn(['CAREGIVER', 'DOCTOR'])
+  // SECURITY: runtime validation only permits CAREGIVER. The TS union keeps
+  // 'DOCTOR' so the (retained but inert) doctor-field code still type-checks.
+  @IsIn(['CAREGIVER' /* , 'DOCTOR' */])
   role!: 'CAREGIVER' | 'DOCTOR';
+
+  @ApiProperty({ example: true, description: 'User accepted Terms of Service' })
+  @IsBoolean()
+  acceptedTerms!: boolean;
+
+  @ApiProperty({ example: true, description: 'User accepted Privacy Policy' })
+  @IsBoolean()
+  acceptedPrivacy!: boolean;
 
   @ApiPropertyOptional({
     example: 'data:image/jpeg;base64,...',

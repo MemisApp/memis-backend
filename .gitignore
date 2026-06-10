@@ -58,3 +58,12 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Secrets - never commit service-account keys or signed binaries
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+serviceAccount*.json
+*.apk
+*.aab
+*.keystore
+*.jks

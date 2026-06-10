@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Post,
@@ -9,8 +10,12 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request, Response } from 'express';
 import {
@@ -56,15 +61,18 @@ export class AuthController {
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
 
+    // refreshToken is also returned for native clients (no browser cookie jar).
     return {
       user,
       accessToken,
+      refreshToken,
       sessionId,
     };
   }
 
   @Post('login')
   @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Login user' })
   @ApiBody({
     schema: {
@@ -121,9 +129,11 @@ export class AuthController {
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
 
+    // refreshToken is also returned for native clients (no browser cookie jar).
     return {
       user,
       accessToken,
+      refreshToken,
       sessionId,
     };
   }
@@ -321,5 +331,88 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.auth.updateMe(req.user.id, dto);
+  }
+
+  @Post('refresh')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @ApiOperation({ summary: 'Exchange refresh token (cookie or body) for a new access token' })
+  async refresh(
+    @Req() req: Request & { cookies?: Record<string, string> },
+    @Body() body: { refreshToken?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // Web clients send the httpOnly cookie; native clients send it in the body.
+    const token = req.cookies?.['refresh_token'] || body?.refreshToken;
+    const { accessToken, refreshToken } = await this.auth.refresh(token ?? '');
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+    });
+    // Also return the rotated token for native clients.
+    return { accessToken, refreshToken };
+  }
+
+  @Post('verify-email')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verify email address with token' })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.auth.verifyEmail(dto.token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Resend the email verification link' })
+  async resendVerification(@Req() req: Request & { user: { id: string } }) {
+    return this.auth.resendVerification(req.user.id);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiBody({ type: ForgotPasswordDto })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.auth.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @ApiOperation({ summary: 'Reset password using a token' })
+  @ApiBody({ type: ResetPasswordDto })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.auth.resetPassword(dto.token, dto.password);
+  }
+
+  @Get('me/data-export')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'GDPR: export all personal data for current user' })
+  async exportData(@Req() req: Request & { user: { id: string } }) {
+    return this.auth.exportUserData(req.user.id);
+  }
+
+  @Delete('me/account')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'GDPR: permanently delete current user account' })
+  async deleteAccount(
+    @Req() req: Request & { user: { id: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.deleteAccount(req.user.id);
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/auth/refresh',
+    });
+    return result;
   }
 }

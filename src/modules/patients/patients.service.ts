@@ -7,12 +7,18 @@ import { CaregiverRole, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
+import { EntitlementService } from '../billing/entitlement.service';
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private entitlements: EntitlementService,
+  ) {}
 
   async create(caregiverId: string, dto: CreatePatientDto) {
+    await this.entitlements.assertCanCreatePatient(caregiverId);
+
     const caregiver = await this.prisma.user.findUnique({
       where: { id: caregiverId },
       select: {

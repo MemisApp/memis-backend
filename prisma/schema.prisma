@@ -35,6 +35,68 @@ model User {
   doctorNotes           DoctorNote[]
   notifications         AppNotification[]
   sentNotifications     AppNotification[] @relation("NotificationActor")
+  subscription          Subscription?
+  aiUsages              AiUsage[]
+  emailVerified         Boolean   @default(false)
+  emailVerifyToken      String?
+  emailVerifyExpiresAt  DateTime?
+  passwordResetToken    String?
+  passwordResetExpiresAt DateTime?
+  acceptedTermsAt       DateTime?
+  acceptedPrivacyAt     DateTime?
+  termsVersion          String?
+}
+
+enum SubscriptionPlan {
+  FREE
+  PLUS
+  FAMILY
+}
+
+enum SubscriptionProvider {
+  REVENUECAT
+  STRIPE
+  MANUAL
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+model Subscription {
+  id                 String               @id @default(cuid())
+  userId             String               @unique
+  provider           SubscriptionProvider @default(MANUAL)
+  plan               SubscriptionPlan     @default(FREE)
+  status             SubscriptionStatus   @default(ACTIVE)
+  trialEndsAt        DateTime?
+  currentPeriodEnd   DateTime?
+  externalCustomerId String?
+  externalSubId      String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([externalCustomerId])
+  @@index([externalSubId])
+}
+
+model AiUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  period    String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([userId])
 }
 
 model UserSession {
@@ -60,6 +122,8 @@ model Patient {
   avatarUrl   String?
   shortIntro  String?
   maritalDate DateTime?
+  // Throttles the "no reminders completed in 24h" caregiver alert to once/day.
+  lastInactivityAlertAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -77,6 +141,9 @@ model Patient {
   notifications     AppNotification[]
   careRooms         Room[]    @relation("PatientRooms")
   patientMessages   Message[] @relation("PatientMessages")
+  medications       Medication[]
+  medicationLogs    MedicationLog[]
+  journalEntries    JournalEntry[]
 }
 
 model PatientCaregiver {
@@ -384,6 +451,68 @@ model DoctorNote {
 
   @@index([patientId, updatedAt])
   @@index([doctorId])
+}
+
+model Medication {
+  id             String   @id @default(cuid())
+  patientId      String
+  name           String
+  dosage         String?
+  // Free-text schedule summary, e.g. "Twice daily" or "08:00, 20:00".
+  frequency      String?
+  // Times of day (HH:mm) used to surface today's doses; stored as JSON array.
+  times          Json?
+  quantity       Int?
+  refillThreshold Int?
+  prescriber     String?
+  notes          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patient Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  logs    MedicationLog[]
+
+  @@index([patientId, isActive])
+}
+
+enum MedicationLogStatus {
+  TAKEN
+  SKIPPED
+  MISSED
+}
+
+model MedicationLog {
+  id           String              @id @default(cuid())
+  medicationId String
+  patientId    String
+  status       MedicationLogStatus @default(TAKEN)
+  scheduledFor DateTime?
+  loggedAt     DateTime            @default(now())
+
+  medication Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  patient    Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([medicationId, loggedAt])
+  @@index([patientId, loggedAt])
+}
+
+model JournalEntry {
+  id         String   @id @default(cuid())
+  patientId  String
+  authorId   String?
+  // Day the entry refers to (date-only semantics, stored at midnight UTC).
+  entryDate  DateTime
+  mood       Int?
+  sleepHours Float?
+  symptoms   Json?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, entryDate])
 }
 
 model AppNotification {

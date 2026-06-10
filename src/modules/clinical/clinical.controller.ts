@@ -13,6 +13,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  EntitlementGuard,
+  RequiresEntitlement,
+} from '../billing/entitlement.guard';
 import { ClinicalService } from './clinical.service';
 import { AssignPatientDto } from './dto/assign-patient.dto';
 import { UpdateAssignmentStatusDto } from './dto/update-assignment-status.dto';
@@ -263,6 +267,54 @@ export class ClinicalController {
     @Param('patientId') patientId: string,
   ) {
     return this.clinicalService.getClockHistoryForCaregiver(req.user.id, patientId);
+  }
+
+  // Caregiver clinical insights (Plus). Gated behind the clinical_insights
+  // entitlement; treatment plans, doctor notes, and the clinical timeline were
+  // previously doctor-only.
+  @Get('/caregiver/patients/:patientId/treatments')
+  @UseGuards(EntitlementGuard)
+  @RequiresEntitlement('clinical_insights')
+  @ApiOperation({ summary: 'Caregiver read-only treatment plans for patient' })
+  getCaregiverTreatments(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getTreatmentsForCaregiver(req.user.id, patientId);
+  }
+
+  @Get('/caregiver/patients/:patientId/notes')
+  @UseGuards(EntitlementGuard)
+  @RequiresEntitlement('clinical_insights')
+  @ApiOperation({ summary: 'Caregiver read-only doctor notes for patient' })
+  getCaregiverDoctorNotes(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getDoctorNotesForCaregiver(req.user.id, patientId);
+  }
+
+  @Get('/caregiver/patients/:patientId/timeline')
+  @UseGuards(EntitlementGuard)
+  @RequiresEntitlement('clinical_insights')
+  @ApiOperation({ summary: 'Caregiver read-only clinical timeline for patient' })
+  getCaregiverTimeline(
+    @Req() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.clinicalService.getTimelineForCaregiver(req.user.id, patientId);
+  }
+
+  @Get('/patient/tests/mmse')
+  @ApiOperation({ summary: 'Patient reads their own MMSE history (with answers)' })
+  getMyMmseHistory(@Req() req: AuthenticatedRequest) {
+    return this.clinicalService.getMyMmseHistory(req.user.id);
+  }
+
+  @Get('/patient/tests/clock')
+  @ApiOperation({ summary: 'Patient reads their own clock test history' })
+  getMyClockHistory(@Req() req: AuthenticatedRequest) {
+    return this.clinicalService.getMyClockHistory(req.user.id);
   }
 
   @Get('/patient/my-doctor')

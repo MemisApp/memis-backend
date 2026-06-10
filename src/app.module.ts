@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,12 +19,23 @@ import { ContactsModule } from './modules/contacts/contacts.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AiModule } from './modules/ai/ai.module';
 import { ClinicalModule } from './modules/clinical/clinical.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { CareModule } from './modules/care/care.module';
+import { MailModule } from './common/mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Enables @Cron jobs (server-side reminder push + inactivity watchdog).
+    ScheduleModule.forRoot(),
+    // Global rate limiting: 100 requests / minute per IP by default. Sensitive
+    // routes (auth, password reset) can tighten this with @Throttle().
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 100 },
+    ]),
     PrismaModule,
     CommonModule,
+    MailModule,
     AuthModule,
     RoomsModule,
     ThreadsModule,
@@ -34,8 +48,13 @@ import { ClinicalModule } from './modules/clinical/clinical.module';
     AdminModule,
     AiModule,
     ClinicalModule,
+    BillingModule,
+    CareModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

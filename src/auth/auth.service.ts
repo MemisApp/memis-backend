@@ -1,15 +1,20 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { Role, Workplace } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { BillingService } from '../modules/billing/billing.service';
+import { MailService } from '../common/mail/mail.service';
 
 interface DeviceInfo {
   platform: string;
@@ -17,8 +22,11 @@ interface DeviceInfo {
   deviceId: string;
 }
 
-const DEFAULT_ACCESS_TTL = '365d';
+// SECURITY: access tokens are short-lived; clients refresh via POST /auth/refresh.
+const DEFAULT_ACCESS_TTL = '30m';
 const REFRESH_TTL_DAYS = 30;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+export const TERMS_VERSION = '2026-06-10';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +34,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private billing: BillingService,
+    private mail: MailService,
   ) {}
 
   private async hash(data: string) {
@@ -36,6 +46,17 @@ export class AuthService {
     return bcrypt.compare(plain, hash);
   }
 
+  /** High-entropy URL-safe token plus a fast sha256 hash for DB lookup. */
+  private makeToken(): { raw: string; hashed: string } {
+    const raw = crypto.randomBytes(32).toString('hex');
+    const hashed = crypto.createHash('sha256').update(raw).digest('hex');
+    return { raw, hashed };
+  }
+
+  private hashToken(raw: string): string {
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
   async register(dto: RegisterDto, ip?: string, userAgent?: string) {
     const email = dto.email.trim().toLowerCase();
     const exists = await this.prisma.user.findUnique({ where: { email } });
@@ -43,17 +64,32 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
 
     const passwordHash = await this.hash(dto.password);
+    const verifyToken = this.makeToken();
+    const verifyExpiresAt = new Date();
+    verifyExpiresAt.setDate(verifyExpiresAt.getDate() + 7);
+    const now = new Date();
+
     const user = await this.prisma.user.create({
       data: {
         email,
         passwordHash,
         firstName: dto.firstName,
         lastName: dto.lastName,
+        // SECURITY: doctor self-registration is disabled for launch. Only
+        // CAREGIVER accounts can self-register; doctors are provisioned by an
+        // admin. The workplace/profession/title branches are retained but only
+        // apply if an admin re-enables the DOCTOR role in RegisterDto.
         role: dto.role as Role,
         workplace: dto.role === 'DOCTOR' ? (dto.workplace as Workplace) : null,
         profession: dto.role === 'DOCTOR' ? dto.profession : null,
         title: dto.role === 'DOCTOR' ? dto.title : null,
         avatarUrl: dto.avatarUrl || null,
+        emailVerifyToken: verifyToken.hashed,
+        emailVerifyExpiresAt: verifyExpiresAt,
+        // GDPR: record consent captured at sign-up (frontend requires it).
+        acceptedTermsAt: dto.acceptedTerms ? now : null,
+        acceptedPrivacyAt: dto.acceptedPrivacy ? now : null,
+        termsVersion: dto.acceptedTerms ? TERMS_VERSION : null,
       },
       select: {
         id: true,
@@ -98,7 +134,242 @@ export class AuthService {
 
     const accessToken = await this.signAccessToken(user.id, user.role);
 
+    // Start a 7-day Plus trial so new caregivers experience the premium value.
+    await this.billing.startTrialIfEligible(user.id);
+
+    // Verification email (does not block registration).
+    await this.mail.sendVerificationEmail(
+      user.email,
+      verifyToken.raw,
+      user.firstName,
+    );
+
     return { user, accessToken, refreshToken, sessionId: session.id };
+  }
+
+  async verifyEmail(token: string) {
+    const hashed = this.hashToken(token);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        emailVerifyToken: hashed,
+        emailVerifyExpiresAt: { gt: new Date() },
+      },
+    });
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification link');
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerifyToken: null,
+        emailVerifyExpiresAt: null,
+      },
+    });
+    await this.mail.sendWelcomeEmail(user.email, user.firstName);
+    return { success: true };
+  }
+
+  async resendVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.emailVerified) return { success: true };
+
+    const verifyToken = this.makeToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerifyToken: verifyToken.hashed,
+        emailVerifyExpiresAt: expiresAt,
+      },
+    });
+    await this.mail.sendVerificationEmail(
+      user.email,
+      verifyToken.raw,
+      user.firstName,
+    );
+    return { success: true };
+  }
+
+  /** Always returns success to avoid leaking whether an email is registered. */
+  async forgotPassword(email: string) {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalized },
+    });
+    if (user) {
+      const resetToken = this.makeToken();
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetToken: resetToken.hashed,
+          passwordResetExpiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+        },
+      });
+      await this.mail.sendPasswordResetEmail(
+        user.email,
+        resetToken.raw,
+        user.firstName,
+      );
+    }
+    return { success: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const hashed = this.hashToken(token);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        passwordResetToken: hashed,
+        passwordResetExpiresAt: { gt: new Date() },
+      },
+    });
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset link');
+    }
+    const passwordHash = await this.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      },
+    });
+    // Invalidate all existing sessions after a password reset.
+    await this.prisma.userSession.deleteMany({ where: { userId: user.id } });
+    return { success: true };
+  }
+
+  async refresh(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token required');
+    }
+    let payload: { sub: string; sid: string; type: string };
+    try {
+      payload = await this.jwt.verifyAsync(refreshToken, {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET')!,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const session = await this.prisma.userSession.findUnique({
+      where: { id: payload.sid },
+    });
+    if (
+      !session ||
+      session.userId !== payload.sub ||
+      session.revokedAt ||
+      session.expiresAt.getTime() < Date.now()
+    ) {
+      throw new UnauthorizedException('Session expired, please log in again');
+    }
+    const matches = await this.verify(refreshToken, session.refreshTokenHash);
+    if (!matches) {
+      // Token reuse / theft - revoke the session.
+      await this.prisma.userSession.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token mismatch');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, role: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + REFRESH_TTL_DAYS);
+    const newRefreshToken = await this.signRefreshToken(
+      user.id,
+      session.id,
+      newExpiresAt,
+    );
+    await this.prisma.userSession.update({
+      where: { id: session.id },
+      data: {
+        refreshTokenHash: await this.hash(newRefreshToken),
+        expiresAt: newExpiresAt,
+      },
+    });
+    const accessToken = await this.signAccessToken(user.id, user.role);
+    return { accessToken, refreshToken: newRefreshToken };
+  }
+
+  async exportUserData(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+        emailVerified: true,
+        acceptedTermsAt: true,
+        acceptedPrivacyAt: true,
+        termsVersion: true,
+        subscription: true,
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const patients = await this.prisma.patientCaregiver.findMany({
+      where: { caregiverId: userId },
+      include: {
+        patient: {
+          include: {
+            reminders: true,
+            contacts: true,
+            mmseTests: true,
+            clockTests: true,
+            treatments: true,
+          },
+        },
+      },
+    });
+
+    const aiConversations = await this.prisma.aiConversation.findMany({
+      where: { ownerId: userId },
+      include: { messages: true },
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      account: user,
+      patients: patients.map((pc) => ({ role: pc.role, ...pc.patient })),
+      aiConversations,
+    };
+  }
+
+  async deleteAccount(userId: string) {
+    const owned = await this.prisma.patientCaregiver.findMany({
+      where: { caregiverId: userId },
+      select: { patientId: true },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const { patientId } of owned) {
+        const others = await tx.patientCaregiver.count({
+          where: { patientId, caregiverId: { not: userId } },
+        });
+        if (others === 0) {
+          await tx.patient.delete({ where: { id: patientId } });
+        }
+      }
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    return { success: true };
   }
 
   async login(

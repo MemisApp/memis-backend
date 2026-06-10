@@ -432,6 +432,16 @@ export class ClinicalService {
       ),
     );
 
+    await this.notifyCaregivers(
+      patientId,
+      scoreDrop >= 3 ? 'Cognitive decline alert' : 'MMSE completed',
+      scoreDrop >= 3
+        ? `The latest MMSE dropped by ${scoreDrop} points (now ${mmse.score}/30). Consider contacting the doctor.`
+        : `MMSE completed with a score of ${mmse.score}/30.`,
+      scoreDrop >= 3 ? 'MMSE_SCORE_DROP_ALERT' : 'MMSE_COMPLETED',
+      { mmseId: mmse.id, score: mmse.score, scoreDrop },
+    );
+
     return mmse;
   }
 
@@ -681,7 +691,7 @@ export class ClinicalService {
     await this.ensureDoctorPatientAccess(doctorId, patientId);
     return this.prisma.mMSETest.findMany({
       where: { patientId },
-      select: { id: true, score: true, createdAt: true },
+      select: { id: true, score: true, createdAt: true, answers: true },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -711,7 +721,9 @@ export class ClinicalService {
     await this.ensureCaregiverAccess(caregiverId, patientId);
     return this.prisma.mMSETest.findMany({
       where: { patientId },
-      select: { id: true, score: true, createdAt: true },
+      // Return stored answers so caregivers can see the question-by-question
+      // breakdown (also used by the PDF doctor-visit report).
+      select: { id: true, score: true, createdAt: true, answers: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -730,6 +742,100 @@ export class ClinicalService {
         imageUrl: true,
         metadata: true,
       },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Caregiver read-only treatment plans for a linked patient. */
+  async getTreatmentsForCaregiver(caregiverId: string, patientId: string) {
+    await this.ensureCaregiverAccess(caregiverId, patientId);
+    return this.prisma.treatment.findMany({
+      where: { patientId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Caregiver read-only doctor notes for a linked patient. */
+  async getDoctorNotesForCaregiver(caregiverId: string, patientId: string) {
+    await this.ensureCaregiverAccess(caregiverId, patientId);
+    return this.prisma.doctorNote.findMany({
+      where: { patientId },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /** Caregiver read-only clinical timeline (reuses the doctor timeline shape). */
+  async getTimelineForCaregiver(caregiverId: string, patientId: string) {
+    await this.ensureCaregiverAccess(caregiverId, patientId);
+    return this.buildTimeline(patientId);
+  }
+
+  /** Patient reads their own treatment plans. */
+  async getMyTreatments(patientId: string) {
+    return this.prisma.treatment.findMany({
+      where: { patientId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private async buildTimeline(patientId: string) {
+    const [anamneze, mmse, clock, treatments] = await Promise.all([
+      this.prisma.anamneze.findMany({
+        where: { patientId },
+        select: { id: true, updatedAt: true, content: true },
+      }),
+      this.prisma.mMSETest.findMany({
+        where: { patientId },
+        select: { id: true, createdAt: true, score: true },
+      }),
+      this.prisma.clockTest.findMany({
+        where: { patientId },
+        select: { id: true, createdAt: true },
+      }),
+      this.prisma.treatment.findMany({
+        where: { patientId },
+        select: { id: true, createdAt: true, description: true },
+      }),
+    ]);
+
+    return [
+      ...anamneze.map((a) => ({
+        type: 'ANAMNEZE_UPDATED',
+        at: a.updatedAt,
+        payload: { id: a.id, content: a.content },
+      })),
+      ...mmse.map((m) => ({
+        type: 'MMSE_COMPLETED',
+        at: m.createdAt,
+        payload: { id: m.id, score: m.score },
+      })),
+      ...clock.map((c) => ({
+        type: 'CLOCK_TEST_COMPLETED',
+        at: c.createdAt,
+        payload: { id: c.id },
+      })),
+      ...treatments.map((t) => ({
+        type: 'TREATMENT_ASSIGNED',
+        at: t.createdAt,
+        payload: { id: t.id, description: t.description },
+      })),
+    ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  }
+
+  /** Patient reads their own MMSE history (with answers). */
+  async getMyMmseHistory(patientId: string) {
+    return this.prisma.mMSETest.findMany({
+      where: { patientId },
+      select: { id: true, score: true, createdAt: true, answers: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Patient reads their own clock test history. */
+  async getMyClockHistory(patientId: string) {
+    return this.prisma.clockTest.findMany({
+      where: { patientId },
+      select: { id: true, createdAt: true, imageUrl: true, metadata: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -781,50 +887,7 @@ export class ClinicalService {
   async getTimeline(doctorId: string, role: string, patientId: string) {
     this.ensureDoctor(role);
     await this.ensureDoctorPatientAccess(doctorId, patientId);
-
-    const [anamneze, mmse, clock, treatments] = await Promise.all([
-      this.prisma.anamneze.findMany({
-        where: { patientId },
-        select: { id: true, updatedAt: true, content: true },
-      }),
-      this.prisma.mMSETest.findMany({
-        where: { patientId },
-        select: { id: true, createdAt: true, score: true },
-      }),
-      this.prisma.clockTest.findMany({
-        where: { patientId },
-        select: { id: true, createdAt: true },
-      }),
-      this.prisma.treatment.findMany({
-        where: { patientId },
-        select: { id: true, createdAt: true, description: true },
-      }),
-    ]);
-
-    const timeline = [
-      ...anamneze.map((a) => ({
-        type: 'ANAMNEZE_UPDATED',
-        at: a.updatedAt,
-        payload: { id: a.id, content: a.content },
-      })),
-      ...mmse.map((m) => ({
-        type: 'MMSE_COMPLETED',
-        at: m.createdAt,
-        payload: { id: m.id, score: m.score },
-      })),
-      ...clock.map((c) => ({
-        type: 'CLOCK_TEST_COMPLETED',
-        at: c.createdAt,
-        payload: { id: c.id },
-      })),
-      ...treatments.map((t) => ({
-        type: 'TREATMENT_ASSIGNED',
-        at: t.createdAt,
-        payload: { id: t.id, description: t.description },
-      })),
-    ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
-
-    return timeline;
+    return this.buildTimeline(patientId);
   }
 
   async generateAiRecommendation(

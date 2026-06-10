@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AiService } from './ai.service';
 import { StreamChatDto } from './dto/stream-chat.dto';
+import { EntitlementService } from '../billing/entitlement.service';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -28,7 +29,23 @@ type AuthenticatedRequest = Request & {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly entitlements: EntitlementService,
+  ) {}
+  private async resolveContextPatientId(
+    userId: string,
+    role: string,
+    requestedPatientId?: string,
+  ): Promise<string | undefined> {
+    if (!requestedPatientId) return undefined;
+    if (role === 'PATIENT') return requestedPatientId;
+    const allowed = await this.entitlements.hasEntitlement(
+      userId,
+      'ai_patient_context',
+    );
+    return allowed ? requestedPatientId : undefined;
+  }
 
   @Get('/conversations')
   @ApiOperation({ summary: 'List AI conversations for current user' })
@@ -72,6 +89,13 @@ export class AiController {
   @Post('/chat')
   @ApiOperation({ summary: 'Non-streaming AI chat (for Android / fallback)' })
   async chat(@Req() req: AuthenticatedRequest, @Body() dto: StreamChatDto) {
+    await this.entitlements.consumeAiMessage(req.user.id);
+    dto.patientId = await this.resolveContextPatientId(
+      req.user.id,
+      req.user.role,
+      dto.patientId,
+    );
+
     const conversation = await this.aiService.upsertConversation(
       req.user.id,
       req.user.role,
@@ -139,6 +163,13 @@ export class AiController {
     @Body() dto: StreamChatDto,
     @Res() res: Response,
   ) {
+    await this.entitlements.consumeAiMessage(req.user.id);
+    dto.patientId = await this.resolveContextPatientId(
+      req.user.id,
+      req.user.role,
+      dto.patientId,
+    );
+
     const conversation = await this.aiService.upsertConversation(
       req.user.id,
       req.user.role,

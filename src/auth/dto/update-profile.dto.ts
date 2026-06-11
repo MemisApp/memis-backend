@@ -7,7 +7,7 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  @Matches(/^[a-zA-Z\s\-']+$/, {
+  @Matches(/^[\p{L}\p{M}][\p{L}\p{M}\s'-]*$/u, {
     message:
       'First name can only contain letters, spaces, hyphens, and apostrophes',
   })
@@ -18,7 +18,7 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  @Matches(/^[a-zA-Z\s\-']+$/, {
+  @Matches(/^[\p{L}\p{M}][\p{L}\p{M}\s'-]*$/u, {
     message:
       'Last name can only contain letters, spaces, hyphens, and apostrophes',
   })

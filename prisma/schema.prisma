@@ -27,6 +27,8 @@ model User {
   sessions   UserSession[]
   createdRooms Room[]
   roomMembers  RoomMember[]
+  roomParticipations RoomParticipant[]
+  sentInvites  CaregiverInvite[] @relation("InvitesSent")
   createdThreads Thread[]
   authoredMessages Message[]
   doctorPatients        DoctorPatient[]
@@ -140,6 +142,8 @@ model Patient {
   doctorNotes       DoctorNote[]
   notifications     AppNotification[]
   careRooms         Room[]    @relation("PatientRooms")
+  roomParticipations RoomParticipant[]
+  caregiverInvites  CaregiverInvite[]
   patientMessages   Message[] @relation("PatientMessages")
   medications       Medication[]
   medicationLogs    MedicationLog[]
@@ -258,9 +262,25 @@ enum RoomMemberRole {
   MEMBER
 }
 
+enum RoomType {
+  GROUP
+  DIRECT
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 model Room {
   id           String          @id @default(cuid())
   name         String
+  type         RoomType        @default(GROUP)
+  // Deterministic key for auto-provisioned rooms so we never create duplicates,
+  // e.g. "group:<patientId>" or "dm:<sortedMemberKey>".
+  key          String?         @unique
   visibility   RoomVisibility  @default(PRIVATE)
   createdById  String
   patientId    String?
@@ -270,10 +290,56 @@ model Room {
   createdBy    User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
   patient      Patient?        @relation("PatientRooms", fields: [patientId], references: [id], onDelete: SetNull)
   members      RoomMember[]
+  participants RoomParticipant[]
   threads      Thread[]
 
   @@index([createdById])
   @@index([patientId])
+}
+
+// Unified membership for both app users (caregivers/doctors) and patients.
+// This is the source of truth for who can read/post in a room and lets a 1:1
+// DM include a patient without exposing it through the care-circle patientId.
+model RoomParticipant {
+  id        String         @id @default(cuid())
+  roomId    String
+  userId    String?
+  patientId String?
+  role      RoomMemberRole @default(MEMBER)
+  joinedAt  DateTime       @default(now())
+
+  room    Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@unique([roomId, patientId])
+  @@index([userId])
+  @@index([patientId])
+  @@index([roomId])
+}
+
+// Email invitation to join a patient's care circle as a caregiver/family member.
+model CaregiverInvite {
+  id           String        @id @default(cuid())
+  patientId    String
+  invitedById  String
+  email        String
+  role         CaregiverRole @default(VIEWER)
+  tokenHash    String        @unique
+  status       InviteStatus  @default(PENDING)
+  expiresAt    DateTime
+  acceptedById String?
+  acceptedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  invitedBy User    @relation("InvitesSent", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([email])
+  @@index([status])
 }
 
 model RoomMember {

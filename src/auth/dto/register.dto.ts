@@ -34,7 +34,7 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty({ message: 'First name is required' })
   @MaxLength(50, { message: 'First name must not exceed 50 characters' })
-  @Matches(/^[a-zA-Z\s\-']+$/, {
+  @Matches(/^[\p{L}\p{M}][\p{L}\p{M}\s'-]*$/u, {
     message:
       'First name can only contain letters, spaces, hyphens, and apostrophes',
   })
@@ -45,7 +45,7 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty({ message: 'Last name is required' })
   @MaxLength(50, { message: 'Last name must not exceed 50 characters' })
-  @Matches(/^[a-zA-Z\s\-']+$/, {
+  @Matches(/^[\p{L}\p{M}][\p{L}\p{M}\s'-]*$/u, {
     message:
       'Last name can only contain letters, spaces, hyphens, and apostrophes',
   })

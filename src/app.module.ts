@@ -21,6 +21,8 @@ import { AiModule } from './modules/ai/ai.module';
 import { ClinicalModule } from './modules/clinical/clinical.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { CareModule } from './modules/care/care.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { InvitesModule } from './modules/invites/invites.module';
 import { MailModule } from './common/mail/mail.module';
 
 @Module({
@@ -50,6 +52,8 @@ import { MailModule } from './common/mail/mail.module';
     ClinicalModule,
     BillingModule,
     CareModule,
+    ChatModule,
+    InvitesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,25 +8,20 @@ import { PushService } from '../clinical/push.service';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INACTIVITY_THRESHOLD_MS = DAY_MS; // 24h with no completed reminder.
 
-/**
- * Server-side reminder delivery. Local (on-device) notifications are unreliable
- * on Android once the app is force-stopped or under aggressive battery
- * optimisation, so the source of truth for "the reminder fired" is this cron,
- * which pushes via FCM/Expo (delivered by the OS even when the app is dead).
- */
 @Injectable()
 export class RemindersScheduler {
   private readonly logger = new Logger(RemindersScheduler.name);
   private readonly timezone: string;
+  private readonly serverPushReminders: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
     config: ConfigService,
   ) {
-    // The HH:mm schedule strings have no timezone, so interpret them in a
-    // single configurable zone (defaults to the app's primary market).
     this.timezone = config.get<string>('APP_TIMEZONE') || 'Europe/Vilnius';
+    this.serverPushReminders =
+      config.get<string>('REMINDER_SERVER_PUSH') === 'true';
   }
 
   /** Calendar parts (in the configured timezone) for a given instant. */
@@ -76,7 +71,10 @@ export class RemindersScheduler {
     };
   }
 
-  private scheduledMinutes(schedule?: string | null, fallback?: Date | null): number | null {
+  private scheduledMinutes(
+    schedule?: string | null,
+    fallback?: Date | null,
+  ): number | null {
     if (schedule && /^\d{1,2}:\d{2}$/.test(schedule)) {
       const [h, m] = schedule.split(':').map(Number);
       if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return h * 60 + m;
@@ -94,7 +92,9 @@ export class RemindersScheduler {
     now: ReturnType<typeof this.zonedParts>,
   ): boolean {
     const recurrence = (reminder.recurrence || 'DAILY').toUpperCase();
-    const sd = reminder.scheduledDate ? this.zonedParts(reminder.scheduledDate) : null;
+    const sd = reminder.scheduledDate
+      ? this.zonedParts(reminder.scheduledDate)
+      : null;
 
     switch (recurrence) {
       case 'ONCE':
@@ -112,7 +112,10 @@ export class RemindersScheduler {
   }
 
   /** True if `completedAt` falls on the same zoned calendar day as `now`. */
-  private completedToday(completedAt: Date | null, now: { dateKey: string }): boolean {
+  private completedToday(
+    completedAt: Date | null,
+    now: { dateKey: string },
+  ): boolean {
     if (!completedAt) return false;
     return this.zonedParts(completedAt).dateKey === now.dateKey;
   }
@@ -125,6 +128,8 @@ export class RemindersScheduler {
 
   @Cron(CronExpression.EVERY_MINUTE, { name: 'reminders-due' })
   async handleDueReminders(): Promise<void> {
+    if (!this.serverPushReminders) return;
+
     const nowDate = new Date();
     const now = this.zonedParts(nowDate);
     const nowMinutes = now.hour * 60 + now.minute;
@@ -161,7 +166,8 @@ export class RemindersScheduler {
         if (this.completedToday(r.completedAt, now)) continue;
 
         // For one-off reminders, never re-fire once fired.
-        if ((r.recurrence || '').toUpperCase() === 'ONCE' && r.lastFiredAt) continue;
+        if ((r.recurrence || '').toUpperCase() === 'ONCE' && r.lastFiredAt)
+          continue;
 
         await this.push.sendToPatient(
           r.patientId,
@@ -181,7 +187,9 @@ export class RemindersScheduler {
     }
 
     if (fired > 0) {
-      this.logger.log(`[REMINDERS] Pushed ${fired} due reminder(s) at ${now.dateKey} ${now.hour}:${String(now.minute).padStart(2, '0')} (${this.timezone})`);
+      this.logger.log(
+        `[REMINDERS] Pushed ${fired} due reminder(s) at ${now.dateKey} ${now.hour}:${String(now.minute).padStart(2, '0')} (${this.timezone})`,
+      );
     }
   }
 
@@ -221,19 +229,24 @@ export class RemindersScheduler {
         // Throttle: at most one alert per patient per 24h.
         if (
           patient.lastInactivityAlertAt &&
-          now - patient.lastInactivityAlertAt.getTime() < INACTIVITY_THRESHOLD_MS
+          now - patient.lastInactivityAlertAt.getTime() <
+            INACTIVITY_THRESHOLD_MS
         ) {
           continue;
         }
 
-        const lastCompletion = patient.reminders.reduce<number | null>((latest, r) => {
-          if (!r.completedAt) return latest;
-          const t = r.completedAt.getTime();
-          return latest === null || t > latest ? t : latest;
-        }, null);
+        const lastCompletion = patient.reminders.reduce<number | null>(
+          (latest, r) => {
+            if (!r.completedAt) return latest;
+            const t = r.completedAt.getTime();
+            return latest === null || t > latest ? t : latest;
+          },
+          null,
+        );
 
         const inactive =
-          lastCompletion === null || now - lastCompletion >= INACTIVITY_THRESHOLD_MS;
+          lastCompletion === null ||
+          now - lastCompletion >= INACTIVITY_THRESHOLD_MS;
         if (!inactive) continue;
 
         const caregivers = await this.prisma.patientCaregiver.findMany({
@@ -278,12 +291,17 @@ export class RemindersScheduler {
         });
         alerted++;
       } catch (err) {
-        this.logger.error(`Inactivity check failed for patient ${patient.id}`, err as Error);
+        this.logger.error(
+          `Inactivity check failed for patient ${patient.id}`,
+          err as Error,
+        );
       }
     }
 
     if (alerted > 0) {
-      this.logger.log(`[INACTIVITY] Sent ${alerted} caregiver check-in alert(s)`);
+      this.logger.log(
+        `[INACTIVITY] Sent ${alerted} caregiver check-in alert(s)`,
+      );
     }
   }
 }

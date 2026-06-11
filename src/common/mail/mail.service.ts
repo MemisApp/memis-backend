@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { buildBrandedEmailHtml } from './email-layout';
 
 @Injectable()
 export class MailService {
@@ -8,6 +9,7 @@ export class MailService {
   private readonly resend: Resend | null;
   private readonly from: string;
   private readonly appUrl: string;
+  private readonly deepLinkScheme: string;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
@@ -16,6 +18,8 @@ export class MailService {
       this.config.get<string>('MAIL_FROM') || 'Memis <no-reply@memis.app>';
     this.appUrl =
       this.config.get<string>('APP_PUBLIC_URL') || 'https://memis.app';
+    this.deepLinkScheme =
+      this.config.get<string>('APP_DEEP_LINK_SCHEME') || 'memis';
     if (!this.resend) {
       this.logger.warn(
         'RESEND_API_KEY not set - emails will be logged instead of sent.',
@@ -35,43 +39,67 @@ export class MailService {
     }
   }
 
-  private layout(title: string, body: string): string {
-    return `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#F8FAFC;padding:24px;">
-      <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border-radius:16px;padding:32px;border:1px solid #E2E8F0;">
-        <h1 style="font-size:20px;color:#0F172A;margin:0 0 16px;">${title}</h1>
-        ${body}
-        <p style="font-size:12px;color:#94A3B8;margin-top:28px;">If you did not request this, you can safely ignore this email.</p>
-        <p style="font-size:12px;color:#94A3B8;">— The Memis Team</p>
-      </div></body></html>`;
-  }
-
   async sendVerificationEmail(to: string, token: string, name?: string) {
-    const link = `${this.appUrl}/verify-email?token=${token}`;
-    const html = this.layout(
-      'Confirm your email',
-      `<p style="font-size:14px;color:#334155;">Hi ${name || 'there'}, welcome to Memis. Please confirm your email address to secure your account.</p>
-       <p style="margin:24px 0;"><a href="${link}" style="background:#2563EB;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;display:inline-block;">Verify email</a></p>
-       <p style="font-size:12px;color:#64748B;">Or paste this link into your browser:<br/>${link}</p>`,
-    );
+    const link = `${this.deepLinkScheme}://verify-email?token=${token}`;
+    const html = buildBrandedEmailHtml({
+      preheader: 'Confirm your Memis email to secure your account.',
+      title: 'Confirm your email',
+      bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
+        <p style="margin:0 0 12px;">Welcome to <strong>Memis</strong>. Please confirm your email address to activate your account and start your free trial.</p>
+        <p style="margin:0;">Open the link on the phone or tablet where Memis is installed.</p>`,
+      cta: { label: 'Verify email', href: link },
+      fallbackLink: link,
+      appUrl: this.appUrl,
+    });
     await this.send(to, 'Confirm your Memis email', html);
   }
 
   async sendPasswordResetEmail(to: string, token: string, name?: string) {
-    const link = `${this.appUrl}/reset-password?token=${token}`;
-    const html = this.layout(
-      'Reset your password',
-      `<p style="font-size:14px;color:#334155;">Hi ${name || 'there'}, we received a request to reset your Memis password. This link expires in 1 hour.</p>
-       <p style="margin:24px 0;"><a href="${link}" style="background:#2563EB;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;display:inline-block;">Reset password</a></p>
-       <p style="font-size:12px;color:#64748B;">Or paste this link into your browser:<br/>${link}</p>`,
-    );
+    const link = `${this.deepLinkScheme}://reset-password?token=${token}`;
+    const html = buildBrandedEmailHtml({
+      preheader: 'Reset your Memis password. This link expires in 1 hour.',
+      title: 'Reset your password',
+      bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
+        <p style="margin:0 0 12px;">We received a request to reset your Memis password. This link expires in <strong>1 hour</strong>.</p>
+        <p style="margin:0;">If you didn't request a reset, you can ignore this email — your password will stay the same.</p>`,
+      cta: { label: 'Reset password', href: link },
+      fallbackLink: link,
+      appUrl: this.appUrl,
+    });
     await this.send(to, 'Reset your Memis password', html);
   }
 
   async sendWelcomeEmail(to: string, name?: string) {
-    const html = this.layout(
-      'Welcome to Memis',
-      `<p style="font-size:14px;color:#334155;">Hi ${name || 'there'}, your email is verified. You now have full access to Memis, including your 7-day free trial of Memis Plus.</p>`,
-    );
+    const html = buildBrandedEmailHtml({
+      preheader: 'Your Memis account is ready. Start your 7-day free trial.',
+      title: 'Welcome to Memis',
+      bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
+        <p style="margin:0 0 12px;">Your email is verified and your account is fully active.</p>
+        <p style="margin:0;">You now have access to Memis, including your <strong>7-day free trial of Memis Plus</strong>. Open the app to add a patient, set reminders, and invite family members to your care circle.</p>`,
+      cta: { label: 'Open Memis', href: `${this.deepLinkScheme}://` },
+      appUrl: this.appUrl,
+    });
     await this.send(to, 'Welcome to Memis', html);
+  }
+
+  async sendCaregiverInviteEmail(
+    to: string,
+    token: string,
+    patientName: string,
+    inviterName: string,
+  ) {
+    const link = `${this.deepLinkScheme}://accept-invite?token=${token}`;
+    const html = buildBrandedEmailHtml({
+      preheader: `${inviterName} invited you to join ${patientName}'s care circle on Memis.`,
+      title: 'You’re invited to a care circle',
+      bodyHtml: `<p style="margin:0 0 12px;"><strong>${inviterName}</strong> has invited you to help care for <strong>${patientName}</strong> on Memis.</p>
+        <p style="margin:0 0 12px;">Memis is a private care-coordination app for families supporting a loved one with Alzheimer's or dementia.</p>
+        <p style="margin:0;">Install Memis, sign in with <strong>${to}</strong>, then tap the button below to join the care circle and start chatting with the family.</p>`,
+      cta: { label: 'Join the care circle', href: link },
+      fallbackLink: link,
+      footerNote: 'This invitation expires in 7 days.',
+      appUrl: this.appUrl,
+    });
+    await this.send(to, `${inviterName} invited you to Memis`, html);
   }
 }

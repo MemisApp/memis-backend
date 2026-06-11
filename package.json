@@ -6,7 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "npx nest build",
+    "build:render": "npx prisma migrate deploy && npx nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/src/main",
     "predev": "node scripts/kill-port.js 3000",
@@ -48,6 +49,7 @@
     "helmet": "^8.2.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
+    "prisma": "^6.15.0",
     "resend": "^6.12.4",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1"
@@ -70,7 +72,6 @@
     "globals": "^16.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
-    "prisma": "^6.15.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",

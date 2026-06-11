@@ -1,0 +1,13 @@
+# Render Blueprint — optional. You can also paste these commands into the
+# Render dashboard manually (Settings → Build & Deploy).
+services:
+  - type: web
+    name: memis-api
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build:render
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production

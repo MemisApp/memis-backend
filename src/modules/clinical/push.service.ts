@@ -22,18 +22,28 @@ export class PushService {
 
   async registerToken(
     patientId: string,
-    devicePublicId: string,
+    // The app sends the device record's internal id (returned from login as
+    // `deviceId`); older/other callers may send the public id. Accept either.
+    deviceRef: string,
     token: string,
   ): Promise<void> {
     const isExpo = this.isExpoToken(token);
     this.logger.log(
-      `[REG] Patient token → patient=${patientId} device=${devicePublicId} ` +
+      `[REG] Patient token → patient=${patientId} device=${deviceRef} ` +
         `type=${isExpo ? 'expo' : 'fcm'} token=${token.substring(0, 20)}…`,
     );
-    await this.prisma.device.updateMany({
-      where: { patientId, devicePublicId },
+    const result = await this.prisma.device.updateMany({
+      where: {
+        patientId,
+        OR: [{ id: deviceRef }, { devicePublicId: deviceRef }],
+      },
       data: { expoPushToken: token },
     });
+    if (result.count === 0) {
+      this.logger.warn(
+        `[REG] No device matched for patient=${patientId} ref=${deviceRef} — token NOT saved`,
+      );
+    }
   }
 
   async registerUserToken(userId: string, token: string): Promise<void> {

@@ -46,9 +46,10 @@ export class MailService {
       title: 'Confirm your email',
       bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
         <p style="margin:0 0 12px;">Welcome to <strong>Memis</strong>. Please confirm your email address to activate your account and start your free trial.</p>
-        <p style="margin:0;">Open the link on the phone or tablet where Memis is installed.</p>`,
+        <p style="margin:0;">Tap the button below on the phone or tablet where Memis is installed. If it doesn't open the app, open Memis and paste the code below.</p>`,
       cta: { label: 'Verify email', href: link },
-      fallbackLink: link,
+      manualCode: token,
+      manualCodeLabel: 'Or paste this confirmation code in the app',
       appUrl: this.appUrl,
     });
     await this.send(to, 'Confirm your Memis email', html);
@@ -61,9 +62,11 @@ export class MailService {
       title: 'Reset your password',
       bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
         <p style="margin:0 0 12px;">We received a request to reset your Memis password. This link expires in <strong>1 hour</strong>.</p>
+        <p style="margin:0 0 12px;">Tap the button below on the device where Memis is installed. If it doesn't open the app, open Memis → <strong>Forgot password</strong> → <strong>Enter code manually</strong> and paste the code below.</p>
         <p style="margin:0;">If you didn't request a reset, you can ignore this email — your password will stay the same.</p>`,
       cta: { label: 'Reset password', href: link },
-      fallbackLink: link,
+      manualCode: token,
+      manualCodeLabel: 'Or paste this reset code in the app',
       appUrl: this.appUrl,
     });
     await this.send(to, 'Reset your Memis password', html);
@@ -94,9 +97,10 @@ export class MailService {
       title: 'You’re invited to a care circle',
       bodyHtml: `<p style="margin:0 0 12px;"><strong>${inviterName}</strong> has invited you to help care for <strong>${patientName}</strong> on Memis.</p>
         <p style="margin:0 0 12px;">Memis is a private care-coordination app for families supporting a loved one with Alzheimer's or dementia.</p>
-        <p style="margin:0;">Install Memis, sign in with <strong>${to}</strong>, then tap the button below to join the care circle and start chatting with the family.</p>`,
+        <p style="margin:0;">Open the button below on the device where Memis is installed, then <strong>create your account (or sign in) using ${to}</strong>. You'll be added to ${patientName}'s care circle automatically — no extra steps.</p>`,
       cta: { label: 'Join the care circle', href: link },
-      fallbackLink: link,
+      manualCode: token,
+      manualCodeLabel: 'Or, in the app, open this invite link / paste this code',
       footerNote: 'This invitation expires in 7 days.',
       appUrl: this.appUrl,
     });

@@ -448,6 +448,7 @@ export class AuthService {
         profession: true,
         title: true,
         role: true,
+        emailVerified: true,
         createdAt: true,
         updatedAt: true,
       },

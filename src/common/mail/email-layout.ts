@@ -27,6 +27,10 @@ export interface EmailLayoutOptions {
   cta?: EmailCta;
   /** Plain deep-link shown below the button */
   fallbackLink?: string;
+  /** A short code the user can type into the app if the button won't open it. */
+  manualCode?: string;
+  /** Label above the manual code box (e.g. "your reset code"). */
+  manualCodeLabel?: string;
   footerNote?: string;
   appUrl?: string;
 }
@@ -46,6 +50,8 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
     bodyHtml,
     cta,
     fallbackLink,
+    manualCode,
+    manualCodeLabel = 'Or enter this code in the Memis app',
     footerNote,
     appUrl = 'https://memis.app',
   } = options;
@@ -54,6 +60,8 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
   const safePreheader = escapeHtml(preheader);
   const safeFallback = fallbackLink ? escapeHtml(fallbackLink) : '';
   const safeFooter = footerNote ? escapeHtml(footerNote) : '';
+  const safeManualCode = manualCode ? escapeHtml(manualCode) : '';
+  const safeManualLabel = escapeHtml(manualCodeLabel);
 
   const ctaBlock = cta
     ? `
@@ -86,6 +94,22 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
         <td style="padding:0 0 20px;">
           <p style="margin:0;padding:12px 14px;background-color:${BRAND.bg};border-radius:10px;font-size:12px;line-height:1.5;color:${BRAND.primaryDark};word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
             ${safeFallback}
+          </p>
+        </td>
+      </tr>`
+    : '';
+
+  const manualCodeBlock = manualCode
+    ? `
+      <tr>
+        <td style="padding:4px 0 6px;font-size:13px;line-height:1.6;color:${BRAND.text};font-weight:600;">
+          ${safeManualLabel}:
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 20px;">
+          <p style="margin:0;padding:14px 16px;background-color:${BRAND.bg};border:1px solid ${BRAND.border};border-radius:10px;font-size:15px;line-height:1.5;color:${BRAND.ink};word-break:break-all;font-weight:700;letter-spacing:0.02em;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
+            ${safeManualCode}
           </p>
         </td>
       </tr>`
@@ -160,6 +184,7 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
                   </td>
                 </tr>
                 ${ctaBlock}
+                ${manualCodeBlock}
                 ${fallbackBlock}
                 <tr>
                   <td style="padding-top:8px;border-top:1px solid ${BRAND.border};">

@@ -108,9 +108,7 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
       </tr>
       <tr>
         <td style="padding:0 0 20px;">
-          <p style="margin:0;padding:14px 16px;background-color:${BRAND.bg};border:1px solid ${BRAND.border};border-radius:10px;font-size:15px;line-height:1.5;color:${BRAND.ink};word-break:break-all;font-weight:700;letter-spacing:0.02em;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
-            ${safeManualCode}
-          </p>
+          <p style="margin:0;padding:14px 16px;background-color:${BRAND.bg};border:1px solid ${BRAND.border};border-radius:10px;font-size:15px;line-height:1.5;color:${BRAND.ink};word-break:break-all;font-weight:700;letter-spacing:0.02em;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;"><span style="white-space:nowrap;">${safeManualCode}</span></p>
         </td>
       </tr>`
     : '';

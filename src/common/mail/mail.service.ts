@@ -10,6 +10,9 @@ export class MailService {
   private readonly from: string;
   private readonly appUrl: string;
   private readonly deepLinkScheme: string;
+  /** Web page that bounces an https link to the `memis://` deep link so email
+   *  buttons open the app reliably from any mail client. */
+  private readonly webAppLinkBase: string;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
@@ -20,6 +23,13 @@ export class MailService {
       this.config.get<string>('APP_PUBLIC_URL') || 'https://memis.app';
     this.deepLinkScheme =
       this.config.get<string>('APP_DEEP_LINK_SCHEME') || 'memis';
+    this.webAppLinkBase =
+      this.config.get<string>('WEB_APP_LINK_BASE') || 'https://jannytech.com/app';
+  }
+
+  /** Builds the https bridge link for a given deep-link target + token. */
+  private appLink(to: string, token: string): string {
+    return `${this.webAppLinkBase}/?to=${to}&token=${encodeURIComponent(token)}`;
     if (!this.resend) {
       this.logger.warn(
         'RESEND_API_KEY not set - emails will be logged instead of sent.',
@@ -40,7 +50,7 @@ export class MailService {
   }
 
   async sendVerificationEmail(to: string, token: string, name?: string) {
-    const link = `${this.deepLinkScheme}://verify-email?token=${token}`;
+    const link = this.appLink('verify-email', token);
     const html = buildBrandedEmailHtml({
       preheader: 'Confirm your Memis email to secure your account.',
       title: 'Confirm your email',
@@ -56,7 +66,7 @@ export class MailService {
   }
 
   async sendPasswordResetEmail(to: string, token: string, name?: string) {
-    const link = `${this.deepLinkScheme}://reset-password?token=${token}`;
+    const link = this.appLink('reset-password', token);
     const html = buildBrandedEmailHtml({
       preheader: 'Reset your Memis password. This link expires in 1 hour.',
       title: 'Reset your password',
@@ -91,7 +101,7 @@ export class MailService {
     patientName: string,
     inviterName: string,
   ) {
-    const link = `${this.deepLinkScheme}://accept-invite?token=${token}`;
+    const link = this.appLink('accept-invite', token);
     const html = buildBrandedEmailHtml({
       preheader: `${inviterName} invited you to join ${patientName}'s care circle on Memis.`,
       title: 'You’re invited to a care circle',

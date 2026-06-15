@@ -21,12 +21,12 @@ type AuthedRequest = Request & { user: { id: string; role: string } };
 
 @ApiTags('invites')
 @Controller('/api')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth('access-token')
 export class InvitesController {
   constructor(private readonly invites: InvitesService) {}
 
   @Post('patients/:patientId/invites')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Invite a family member / caregiver by email' })
   create(
     @Req() req: AuthedRequest,
@@ -42,17 +42,22 @@ export class InvitesController {
   }
 
   @Get('patients/:patientId/invites')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List invites for a patient circle' })
   list(@Req() req: AuthedRequest, @Param('patientId') patientId: string) {
     return this.invites.listInvites(req.user.id, patientId);
   }
 
   @Delete('invites/:inviteId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke a pending invite' })
   revoke(@Req() req: AuthedRequest, @Param('inviteId') inviteId: string) {
     return this.invites.revokeInvite(req.user.id, inviteId);
   }
 
+  // Public: a new invitee isn't signed in yet when previewing their invite.
   @Get('invites/lookup')
   @ApiOperation({
     summary: 'Preview an invite by token (for the accept screen)',
@@ -62,6 +67,8 @@ export class InvitesController {
   }
 
   @Post('invites/accept')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Accept an invite and join the care circle' })
   accept(@Req() req: AuthedRequest, @Body() dto: AcceptInviteDto) {
     return this.invites.accept(req.user.id, dto.token);

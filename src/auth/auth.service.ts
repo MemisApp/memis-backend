@@ -485,8 +485,13 @@ export class AuthService {
   }
 
   private async signAccessToken(userId: string, role: string) {
+    // Patient devices have no password/login of their own, so they should stay
+    // signed in. Give patient access tokens a long life (the app also silently
+    // re-authenticates with the trusted device id if one ever expires).
     const accessTtl =
-      this.config.get<string>('JWT_ACCESS_TTL') || DEFAULT_ACCESS_TTL;
+      role === 'PATIENT'
+        ? this.config.get<string>('JWT_PATIENT_ACCESS_TTL') || '180d'
+        : this.config.get<string>('JWT_ACCESS_TTL') || DEFAULT_ACCESS_TTL;
     return this.jwt.signAsync(
       { sub: userId, role, type: 'access' },
       {

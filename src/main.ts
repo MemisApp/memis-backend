@@ -14,18 +14,26 @@ import { json, urlencoded } from 'express';
  * from CORS_ORIGINS; if none is configured (e.g. local dev) we allow all.
  */
 function buildCorsOptions() {
+  const alwaysAllow = ['https://jannytech.com', 'https://www.jannytech.com'];
   const raw = process.env.CORS_ORIGINS?.trim();
   if (!raw) {
     return { origin: true, credentials: true };
   }
-  const allowlist = raw.split(',').map((o) => o.trim()).filter(Boolean);
+  const allowlist = Array.from(
+    new Set([
+      ...raw
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean),
+      ...alwaysAllow,
+    ]),
+  );
   return {
     credentials: true,
     origin: (
       origin: string | undefined,
       cb: (err: Error | null, allow?: boolean) => void,
     ) => {
-      // Allow same-origin / non-browser requests (no Origin header).
       if (!origin || allowlist.includes(origin)) return cb(null, true);
       cb(new Error(`Origin ${origin} not allowed by CORS`));
     },

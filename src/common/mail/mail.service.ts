@@ -9,9 +9,6 @@ export class MailService {
   private readonly resend: Resend | null;
   private readonly from: string;
   private readonly appUrl: string;
-  private readonly deepLinkScheme: string;
-  /** Web page that bounces an https link to the `memis://` deep link so email
-   *  buttons open the app reliably from any mail client. */
   private readonly webAppLinkBase: string;
 
   constructor(private readonly config: ConfigService) {
@@ -26,13 +23,11 @@ export class MailService {
       this.config.get<string>('MAIL_FROM') || 'Memis <no-reply@jannytech.com>';
     this.appUrl =
       this.config.get<string>('APP_PUBLIC_URL') || 'https://jannytech.com';
-    this.deepLinkScheme =
-      this.config.get<string>('APP_DEEP_LINK_SCHEME') || 'memis';
     this.webAppLinkBase =
-      this.config.get<string>('WEB_APP_LINK_BASE') || 'https://jannytech.com/app';
+      this.config.get<string>('WEB_APP_LINK_BASE') ||
+      'https://jannytech.com/app';
   }
 
-  /** Builds the https bridge link for a given deep-link target + token. */
   private appLink(to: string, token: string): string {
     return `${this.webAppLinkBase}/?to=${to}&token=${encodeURIComponent(token)}`;
   }
@@ -89,7 +84,7 @@ export class MailService {
       bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
         <p style="margin:0 0 12px;">Your email is verified and your account is fully active.</p>
         <p style="margin:0;">You now have access to Memis, including your <strong>7-day free trial of Memis Plus</strong>. Open the app to add a patient, set reminders, and invite family members to your care circle.</p>`,
-      cta: { label: 'Open Memis', href: `${this.deepLinkScheme}://` },
+      cta: { label: 'Open Memis', href: this.webAppLinkBase },
       appUrl: this.appUrl,
     });
     await this.send(to, 'Welcome to Memis', html);
@@ -110,7 +105,8 @@ export class MailService {
         <p style="margin:0;">Open the button below on the device where Memis is installed, then <strong>create your account (or sign in) using ${to}</strong>. You'll be added to ${patientName}'s care circle automatically — no extra steps.</p>`,
       cta: { label: 'Join the care circle', href: link },
       manualCode: token,
-      manualCodeLabel: 'Or, in the app, open this invite link / paste this code',
+      manualCodeLabel:
+        'Or, in the app, open this invite link / paste this code',
       footerNote: 'This invitation expires in 7 days.',
       appUrl: this.appUrl,
     });

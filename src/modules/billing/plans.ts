@@ -8,7 +8,8 @@ export type EntitlementKey =
   | 'pdf_export'
   | 'accessibility_suite'
   | 'multi_caregiver'
-  | 'safety_location';
+  | 'safety_location'
+  | 'care_digest';
 
 export interface PlanLimits {
   aiMessagesPerMonth: number | null;
@@ -29,6 +30,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
       accessibility_suite: false,
       multi_caregiver: false,
       safety_location: false,
+      care_digest: false,
     },
   },
   PLUS: {
@@ -42,7 +44,9 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
       pdf_export: true,
       accessibility_suite: true,
       multi_caregiver: false,
-      safety_location: false,
+      // Location safety / wander alerts / SOS / check-in anchor the paid tier.
+      safety_location: true,
+      care_digest: true,
     },
   },
   FAMILY: {
@@ -57,6 +61,7 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
       accessibility_suite: true,
       multi_caregiver: true,
       safety_location: true,
+      care_digest: true,
     },
   },
 };

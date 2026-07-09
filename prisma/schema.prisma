@@ -148,6 +148,10 @@ model Patient {
   medications       Medication[]
   medicationLogs    MedicationLog[]
   journalEntries    JournalEntry[]
+  safeZones         SafeZone[]
+  locationPings     LocationPing[]
+  checkIns          CheckIn[]
+  careSettings      PatientCareSettings?
 }
 
 model PatientCaregiver {
@@ -533,6 +537,8 @@ model Medication {
   prescriber     String?
   notes          String?
   isActive       Boolean  @default(true)
+  // Throttles the low-stock refill alert to the care circle.
+  lastRefillAlertAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -599,4 +605,93 @@ model AppNotification {
 
   @@index([userId, isRead, createdAt])
   @@index([patientId])
+}
+
+// A geofenced "safe zone" (e.g. home, day-centre). Leaving every active zone
+// triggers a wander alert to the care circle.
+model SafeZone {
+  id          String   @id @default(cuid())
+  patientId   String
+  name        String
+  latitude    Float
+  longitude   Float
+  radiusM     Int      @default(150)
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+// A single reported location fix for a patient device. Retained as a short
+// breadcrumb trail; wander detection runs on each ingest.
+model LocationPing {
+  id             String   @id @default(cuid())
+  patientId      String
+  latitude       Float
+  longitude      Float
+  accuracyM      Float?
+  battery        Float?
+  insideSafeZone Boolean?
+  // app | background | sos
+  source         String   @default("app")
+  createdAt      DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+}
+
+// A patient "I'm OK" daily check-in. Missing one past the configured hour
+// escalates to the care circle.
+model CheckIn {
+  id        String   @id @default(cuid())
+  patientId String
+  status    String   @default("OK")
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+}
+
+// Per-patient safety / monitoring settings and the throttle timestamps used by
+// the schedulers. One row per patient (lazily created).
+model PatientCareSettings {
+  id        String @id @default(cuid())
+  patientId String @unique
+
+  // Location safety (last known fix + wander throttle)
+  lastKnownLat            Float?
+  lastKnownLng            Float?
+  lastLocationAt          DateTime?
+  lastKnownInsideSafeZone Boolean?
+  lastWanderAlertAt       DateTime?
+
+  // Daily check-in
+  checkInEnabled           Boolean   @default(false)
+  // Local hour (0-23) by which the patient should have checked in.
+  checkInByHour            Int       @default(20)
+  lastCheckInAt            DateTime?
+  lastMissedCheckInAlertAt DateTime?
+
+  // Medication adherence escalation throttle
+  lastMissedMedAlertAt DateTime?
+
+  // Cognitive decline monitoring
+  cognitiveMonitoringEnabled Boolean   @default(false)
+  lastCognitivePromptAt      DateTime?
+  lastDeclineAlertAt         DateTime?
+
+  // Care digest: OFF | DAILY | WEEKLY
+  digestFrequency String    @default("OFF")
+  lastDigestAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }

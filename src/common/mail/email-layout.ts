@@ -53,7 +53,7 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
     manualCode,
     manualCodeLabel = 'Or enter this code in the Memis app',
     footerNote,
-    appUrl = 'https://memis.app',
+    appUrl = 'https://jannytech.com',
   } = options;
 
   const safeTitle = escapeHtml(title);
@@ -202,9 +202,7 @@ export function buildBrandedEmailHtml(options: EmailLayoutOptions): string {
                 Memis — private care coordination for families
               </p>
               <p style="margin:0;font-size:12px;line-height:1.6;color:${BRAND.grey};">
-                <a href="${appUrl}" style="color:${BRAND.primaryDark};text-decoration:none;">memis.app</a>
-                &nbsp;·&nbsp;
-                <a href="https://jannytech.com/" style="color:${BRAND.primaryDark};text-decoration:none;">JannyTech</a>
+                <a href="${appUrl}" style="color:${BRAND.primaryDark};text-decoration:none;">jannytech.com</a>
               </p>
               <p style="margin:12px 0 0;font-size:11px;color:#C5C9C7;">
                 © ${new Date().getFullYear()} JannyTech. All rights reserved.

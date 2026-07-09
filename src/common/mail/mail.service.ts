@@ -17,10 +17,15 @@ export class MailService {
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
+    if (!this.resend) {
+      this.logger.warn(
+        'RESEND_API_KEY not set - emails will be logged instead of sent.',
+      );
+    }
     this.from =
-      this.config.get<string>('MAIL_FROM') || 'Memis <no-reply@memis.app>';
+      this.config.get<string>('MAIL_FROM') || 'Memis <no-reply@jannytech.com>';
     this.appUrl =
-      this.config.get<string>('APP_PUBLIC_URL') || 'https://memis.app';
+      this.config.get<string>('APP_PUBLIC_URL') || 'https://jannytech.com';
     this.deepLinkScheme =
       this.config.get<string>('APP_DEEP_LINK_SCHEME') || 'memis';
     this.webAppLinkBase =
@@ -30,11 +35,6 @@ export class MailService {
   /** Builds the https bridge link for a given deep-link target + token. */
   private appLink(to: string, token: string): string {
     return `${this.webAppLinkBase}/?to=${to}&token=${encodeURIComponent(token)}`;
-    if (!this.resend) {
-      this.logger.warn(
-        'RESEND_API_KEY not set - emails will be logged instead of sent.',
-      );
-    }
   }
 
   private async send(to: string, subject: string, html: string) {

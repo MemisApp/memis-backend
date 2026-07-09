@@ -46,7 +46,7 @@ export class CreateContactDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(300)
+  @MaxLength(2500)
   description?: string;
 
   @ApiProperty({

@@ -52,7 +52,7 @@ export class CreatePatientDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(2500)
   shortIntro?: string;
 
   @ApiProperty({

@@ -24,6 +24,8 @@ import { CareModule } from './modules/care/care.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { InvitesModule } from './modules/invites/invites.module';
 import { MailModule } from './common/mail/mail.module';
+import { SafetyModule } from './modules/safety/safety.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { MailModule } from './common/mail/mail.module';
     CareModule,
     ChatModule,
     InvitesModule,
+    SafetyModule,
+    MonitoringModule,
   ],
   controllers: [AppController],
   providers: [

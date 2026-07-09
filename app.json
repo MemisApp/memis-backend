@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ee09421d-d48c-48b9-837f-838b2a0f1eb1"
+      }
+    },
+    "android": {
+      "package": "com.jannytech.memisapi"
+    }
+  }
+}

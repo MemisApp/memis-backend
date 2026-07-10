@@ -71,6 +71,22 @@ export class ContactsController {
     return this.contactsService.findByPatient(patientId, userId);
   }
 
+  @Get('/api/patients/:patientId/care-team')
+  @ApiOperation({
+    summary: 'Get the patient care circle (invited caregivers/viewers)',
+  })
+  @ApiParam({ name: 'patientId', description: 'Patient ID' })
+  @ApiResponse({ status: 200, description: 'Successfully retrieved care team' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'No access to this patient' })
+  async findCareTeam(
+    @Request() req: AuthenticatedRequest,
+    @Param('patientId') patientId: string,
+  ) {
+    const userId = req.user.id;
+    return this.contactsService.findCareTeam(patientId, userId);
+  }
+
   @Post('/api/patients/:patientId/contacts')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create contact for patient' })

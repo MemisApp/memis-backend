@@ -71,6 +71,59 @@ export class ContactsService {
     return contacts;
   }
 
+  /**
+   * Care-circle members (invited caregivers/viewers) for a patient, shaped so
+   * the patient app can list them alongside phonebook contacts. These are User
+   * accounts — not editable Contact records — so they're returned read-only.
+   */
+  async findCareTeam(patientId: string, userId: string) {
+    const hasAccess = await this.hasPatientAccess(userId, patientId);
+    if (!hasAccess) {
+      throw new ForbiddenException('No access to this patient');
+    }
+
+    const links = await this.prisma.patientCaregiver.findMany({
+      where: { patientId },
+      select: {
+        role: true,
+        caregiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    const rolePriority: Record<string, number> = {
+      OWNER: 0,
+      EDITOR: 1,
+      VIEWER: 2,
+    };
+
+    return links
+      .map((l) => ({
+        id: l.caregiver.id,
+        firstName: l.caregiver.firstName,
+        lastName: l.caregiver.lastName,
+        email: l.caregiver.email,
+        phone: l.caregiver.phone,
+        avatarUrl: l.caregiver.avatarUrl,
+        role: l.role,
+      }))
+      .sort((a, b) => {
+        const pr = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
+        if (pr !== 0) return pr;
+        return `${a.firstName} ${a.lastName}`.localeCompare(
+          `${b.firstName} ${b.lastName}`,
+        );
+      });
+  }
+
   async findOne(contactId: string, userId: string) {
     const contact = await this.prisma.contact.findUnique({
       where: { id: contactId },

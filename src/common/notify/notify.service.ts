@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PushService } from '../../modules/clinical/push.service';
@@ -18,6 +18,8 @@ export interface CaregiverNotification {
  */
 @Injectable()
 export class NotifyService {
+  private readonly logger = new Logger(NotifyService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
@@ -50,11 +52,22 @@ export class NotifyService {
       })),
     });
 
-    await this.push.sendToUsers(caregiverIds, n.title, n.body, {
-      type: n.type,
-      patientId,
-      ...(n.metadata ?? {}),
-    });
+    // Push delivery is best-effort: the in-app notifications above are already
+    // persisted, so a push-provider hiccup must never fail the caller (this is
+    // especially important for SOS, where the alert has effectively been sent).
+    try {
+      await this.push.sendToUsers(caregiverIds, n.title, n.body, {
+        type: n.type,
+        patientId,
+        ...(n.metadata ?? {}),
+      });
+    } catch (err) {
+      this.logger.error(
+        `[NOTIFY] Push dispatch failed for patient ${patientId} (${n.type}); ` +
+          `in-app notifications were still saved`,
+        err as Error,
+      );
+    }
 
     return caregiverIds.length;
   }

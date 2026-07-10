@@ -281,13 +281,23 @@ export class LocationService {
       typeof dto.latitude === 'number' && typeof dto.longitude === 'number';
 
     if (hasCoords) {
-      await this.ingestPing(patientId, {
-        latitude: dto.latitude!,
-        longitude: dto.longitude!,
-        accuracyM: dto.accuracyM,
-        battery: dto.battery,
-        source: 'sos',
-      });
+      // Recording the location is best-effort — never let a location-write
+      // failure stop the actual SOS alert from reaching the care circle.
+      try {
+        await this.ingestPing(patientId, {
+          latitude: dto.latitude!,
+          longitude: dto.longitude!,
+          accuracyM: dto.accuracyM,
+          battery: dto.battery,
+          source: 'sos',
+        });
+      } catch (err) {
+        this.logger.error(
+          `[SOS] Failed to record location for patient ${patientId}; ` +
+            `continuing with the alert`,
+          err as Error,
+        );
+      }
     }
 
     const patient = await this.prisma.patient.findUnique({

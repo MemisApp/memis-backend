@@ -68,7 +68,9 @@ export class PatientsService {
           patientId: createdPatient.id,
           relation: 'OTHER',
           name: `${caregiver.firstName} ${caregiver.lastName}`,
-          phone: caregiver.phone || 'Not provided',
+          // Empty when unknown — never a placeholder string that renders as a
+          // real phone number in the patient app.
+          phone: caregiver.phone || '',
           photoUrl: caregiver.avatarUrl,
           description: `Primary caregiver (${caregiver.email})`,
           isEmergencyContact: true,

@@ -381,6 +381,16 @@ export class ClinicalService {
       this.logger.log(
         `Clock submit success patient=${patientId} clockTestId=${test.id} elapsedMs=${Date.now() - startedAt}`,
       );
+
+      // Background AI (Gemini) analysis of the drawing — the submission never
+      // waits on it and never fails because of it.
+      void this.analyzeClockTestWithAi(test.id, patientId, imageUrl, dto.metadata).catch(
+        (e: unknown) =>
+          this.logger.warn(
+            `Clock AI analysis failed for ${test.id}: ${e instanceof Error ? e.message : e}`,
+          ),
+      );
+
       return test;
     } catch (error: unknown) {
       const message =
@@ -390,6 +400,155 @@ export class ClinicalService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Analyzes a submitted clock drawing with Gemini vision and stores the
+   * result on the test record (metadata.aiAnalysis) so caregivers can review
+   * a structured, clinically-framed assessment. Informational only — clearly
+   * marked as not a diagnosis. Requires a raster (PNG/JPEG/WebP) data URL;
+   * legacy SVG submissions are skipped.
+   */
+  private async analyzeClockTestWithAi(
+    clockTestId: string,
+    patientId: string,
+    imageUrl: string,
+    submitMetadata?: Record<string, unknown>,
+  ) {
+    const geminiApiKey = this.config.get<string>('GEMINI_API_KEY');
+    if (!geminiApiKey) return;
+
+    const match = imageUrl.match(
+      /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/,
+    );
+    if (!match) {
+      this.logger.log(
+        `Clock AI analysis skipped for ${clockTestId}: not a base64 raster image`,
+      );
+      return;
+    }
+    const [, mimeType, base64Data] = match;
+    const targetTime =
+      typeof submitMetadata?.targetTime === 'string'
+        ? submitMetadata.targetTime
+        : null;
+
+    const prompt = [
+      'You are a clinical assistant helping dementia caregivers interpret a Clock Drawing Test (CDT).',
+      `The patient was asked to draw an analog clock face${targetTime ? ` showing the time ${targetTime}` : ''}. The dashed circle, if visible, is a printed guide — only the hand-drawn strokes are the patient's work.`,
+      'Assess the drawing using the Shulman scoring system (0–5, where 5 = perfect clock, 0 = no reasonable attempt):',
+      '5: perfect clock; 4: minor visuospatial errors; 3: inaccurate time with intact visuospatial organisation; 2: moderate disorganisation; 1: severe disorganisation; 0: unable / no representation of a clock.',
+      'Respond with STRICT JSON only, no markdown fences, matching exactly this shape:',
+      '{"score": <integer 0-5>, "summary": "<2-3 sentence plain-language summary for a family caregiver>", "observations": ["<specific things done well or poorly: circle, number placement, hand placement, time accuracy>"], "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>"}',
+      'Rules: be factual about what is visible; never diagnose; use warm, non-alarming language; if the drawing is empty or uninterpretable, score it 0 and say so kindly.',
+    ].join('\n');
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { inline_data: { mime_type: mimeType, data: base64Data } },
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 700,
+            responseMimeType: 'application/json',
+          },
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Gemini error ${response.status}: ${await response.text()}`);
+    }
+
+    const data = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const rawText =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || '')
+        .join('') || '';
+    const jsonText = rawText.replace(/^```(?:json)?/m, '').replace(/```\s*$/m, '').trim();
+
+    let parsed: {
+      score?: number;
+      summary?: string;
+      observations?: string[];
+      concerns?: string[];
+      recommendation?: string;
+    };
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      throw new Error(`Unparseable Gemini analysis: ${rawText.slice(0, 200)}`);
+    }
+
+    const score =
+      typeof parsed.score === 'number'
+        ? Math.max(0, Math.min(5, Math.round(parsed.score)))
+        : null;
+    const aiAnalysis = {
+      score,
+      maxScore: 5,
+      scale: 'Shulman',
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      observations: Array.isArray(parsed.observations)
+        ? parsed.observations.filter((o) => typeof o === 'string').slice(0, 8)
+        : [],
+      concerns: Array.isArray(parsed.concerns)
+        ? parsed.concerns.filter((c) => typeof c === 'string').slice(0, 6)
+        : [],
+      recommendation:
+        typeof parsed.recommendation === 'string' ? parsed.recommendation : '',
+      model: 'gemini-2.5-flash',
+      analyzedAt: new Date().toISOString(),
+    };
+
+    // Re-read + merge so we never clobber a doctor rating written meanwhile.
+    const current = await this.prisma.clockTest.findUnique({
+      where: { id: clockTestId },
+      select: { metadata: true },
+    });
+    const currentMetadata =
+      current?.metadata && typeof current.metadata === 'object'
+        ? (current.metadata as Record<string, unknown>)
+        : {};
+    await this.prisma.clockTest.update({
+      where: { id: clockTestId },
+      data: {
+        metadata: { ...currentMetadata, aiAnalysis } as Prisma.InputJsonValue,
+      },
+    });
+    this.logger.log(
+      `Clock AI analysis stored for ${clockTestId} (score ${score ?? 'n/a'}/5)`,
+    );
+
+    // Let the care circle know the reviewed result is ready.
+    const caregivers = await this.prisma.patientCaregiver.findMany({
+      where: { patientId },
+      select: { caregiverId: true },
+    });
+    await Promise.all(
+      caregivers.map((c) =>
+        this.createNotification({
+          userId: c.caregiverId,
+          patientId,
+          type: 'CLOCK_TEST_ANALYZED',
+          title: 'Clock drawing analyzed',
+          body: `AI review of the latest clock drawing is ready${score !== null ? ` (score ${score}/5)` : ''}. Open Test History to see it.`,
+          metadata: { clockTestId, aiScore: score },
+        }),
+      ),
+    );
   }
 
   async submitMmseTest(patientId: string, dto: CreateMmseTestDto) {

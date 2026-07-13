@@ -4,6 +4,7 @@ import { CaregiverRole, Role } from '@prisma/client';
 
 import { PatientsService } from './patients.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../billing/entitlement.service';
 
 describe('PatientsService', () => {
   let service: PatientsService;
@@ -28,11 +29,16 @@ describe('PatientsService', () => {
     $transaction: jest.fn(),
   };
 
+  const mockEntitlements = {
+    assertCanCreatePatient: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PatientsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: EntitlementService, useValue: mockEntitlements },
       ],
     }).compile();
 

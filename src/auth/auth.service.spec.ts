@@ -6,6 +6,8 @@ import * as bcrypt from 'bcrypt';
 
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BillingService } from '../modules/billing/billing.service';
+import { MailService } from '../common/mail/mail.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed_password'),
@@ -45,6 +47,16 @@ describe('AuthService', () => {
     get: jest.fn().mockReturnValue('test_secret'),
   };
 
+  const mockBilling = {
+    startTrialIfEligible: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockMail = {
+    sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+    sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+    sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,6 +64,8 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: JwtService, useValue: mockJwt },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: BillingService, useValue: mockBilling },
+        { provide: MailService, useValue: mockMail },
       ],
     }).compile();
 

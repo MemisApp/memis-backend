@@ -16,10 +16,14 @@ describe('AiService', () => {
   const mockPrisma = {
     doctorPatient: { findUnique: jest.fn() },
     patientCaregiver: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn() },
     contact: { findMany: jest.fn() },
     anamneze: { findMany: jest.fn() },
     mMSETest: { findMany: jest.fn() },
     treatment: { findMany: jest.fn() },
+    medication: { findMany: jest.fn().mockResolvedValue([]) },
+    reminder: { findMany: jest.fn().mockResolvedValue([]) },
+    journalEntry: { findMany: jest.fn().mockResolvedValue([]) },
     aiConversation: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -66,6 +70,10 @@ describe('AiService', () => {
     mockPrisma.anamneze.findMany.mockResolvedValue([]);
     mockPrisma.mMSETest.findMany.mockResolvedValue([]);
     mockPrisma.treatment.findMany.mockResolvedValue([]);
+    mockPrisma.medication.findMany.mockResolvedValue([]);
+    mockPrisma.reminder.findMany.mockResolvedValue([]);
+    mockPrisma.journalEntry.findMany.mockResolvedValue([]);
+    mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Test', lastName: 'User' });
   };
 
   describe('createStreamContext', () => {

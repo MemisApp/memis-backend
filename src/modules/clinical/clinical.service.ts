@@ -433,13 +433,22 @@ export class ClinicalService {
         ? submitMetadata.targetTime
         : null;
 
+    const priorScores = await this.getPriorClockScores(patientId, clockTestId);
+    const historyLine =
+      priorScores.length > 0
+        ? `Previous Shulman scores for this patient (most recent first): ${priorScores
+            .map((p) => `${p.score}/5 on ${p.date}`)
+            .join('; ')}. Compare this new drawing against them to judge whether the patient is improving, stable, or declining.`
+        : 'There are no previous scored drawings for this patient, so report the trend as "stable" (no history yet).';
+
     const prompt = [
       'You are a clinical assistant helping dementia caregivers interpret a Clock Drawing Test (CDT).',
       `The patient was asked to draw an analog clock face${targetTime ? ` showing the time ${targetTime}` : ''}. The dashed circle, if visible, is a printed guide — only the hand-drawn strokes are the patient's work.`,
       'Assess the drawing using the Shulman scoring system (0–5, where 5 = perfect clock, 0 = no reasonable attempt):',
       '5: perfect clock; 4: minor visuospatial errors; 3: inaccurate time with intact visuospatial organisation; 2: moderate disorganisation; 1: severe disorganisation; 0: unable / no representation of a clock.',
+      historyLine,
       'Respond with STRICT JSON only, no markdown fences, matching exactly this shape:',
-      '{"score": <integer 0-5>, "summary": "<2-3 sentence plain-language summary for a family caregiver>", "observations": ["<specific things done well or poorly: circle, number placement, hand placement, time accuracy>"], "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>"}',
+      '{"score": <integer 0-5>, "summary": "<2-3 sentence plain-language summary for a family caregiver>", "observations": ["<specific things done well or poorly: circle, number placement, hand placement, time accuracy>"], "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>", "trend": "<one of: improving | stable | declining>", "trendNote": "<1 sentence explaining the trend vs previous scores; if no history, say this is the first recorded drawing>"}',
       'Rules: be factual about what is visible; never diagnose; use warm, non-alarming language; if the drawing is empty or uninterpretable, score it 0 and say so kindly.',
     ].join('\n');
 
@@ -485,6 +494,8 @@ export class ClinicalService {
       observations?: string[];
       concerns?: string[];
       recommendation?: string;
+      trend?: string;
+      trendNote?: string;
     };
     try {
       parsed = JSON.parse(jsonText);
@@ -509,6 +520,8 @@ export class ClinicalService {
         : [],
       recommendation:
         typeof parsed.recommendation === 'string' ? parsed.recommendation : '',
+      trend: this.normalizeTrend(parsed.trend),
+      trendNote: typeof parsed.trendNote === 'string' ? parsed.trendNote : '',
       model: 'gemini-2.5-flash',
       analyzedAt: new Date().toISOString(),
     };
@@ -601,7 +614,162 @@ export class ClinicalService {
       { mmseId: mmse.id, score: mmse.score, scoreDrop },
     );
 
+    void this.analyzeMmseWithAi(mmse.id, patientId).catch((e: unknown) =>
+      this.logger.warn(
+        `MMSE AI analysis failed for ${mmse.id}: ${e instanceof Error ? e.message : e}`,
+      ),
+    );
+
     return mmse;
+  }
+
+  private normalizeTrend(value: unknown): 'improving' | 'stable' | 'declining' {
+    const v = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (v === 'improving' || v === 'declining') return v;
+    return 'stable';
+  }
+
+  private async getPriorClockScores(
+    patientId: string,
+    excludeClockTestId: string,
+  ): Promise<{ score: number; date: string }[]> {
+    const prior = await this.prisma.clockTest.findMany({
+      where: { patientId, id: { not: excludeClockTestId } },
+      select: { metadata: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+    const out: { score: number; date: string }[] = [];
+    for (const t of prior) {
+      const meta =
+        t.metadata && typeof t.metadata === 'object'
+          ? (t.metadata as Record<string, unknown>)
+          : {};
+      const analysis =
+        meta.aiAnalysis && typeof meta.aiAnalysis === 'object'
+          ? (meta.aiAnalysis as Record<string, unknown>)
+          : {};
+      if (typeof analysis.score === 'number') {
+        out.push({
+          score: analysis.score,
+          date: new Date(t.createdAt).toLocaleDateString(),
+        });
+      }
+    }
+    return out;
+  }
+
+  private async analyzeMmseWithAi(mmseId: string, patientId: string) {
+    const geminiApiKey = this.config.get<string>('GEMINI_API_KEY');
+    if (!geminiApiKey) return;
+
+    const current = await this.prisma.mMSETest.findUnique({
+      where: { id: mmseId },
+      select: { score: true, createdAt: true },
+    });
+    if (!current) return;
+
+    const history = await this.prisma.mMSETest.findMany({
+      where: { patientId, id: { not: mmseId } },
+      select: { score: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+    });
+    const historyLine =
+      history.length > 0
+        ? `Previous MMSE scores (most recent first): ${history
+            .map(
+              (h) =>
+                `${h.score}/30 on ${new Date(h.createdAt).toLocaleDateString()}`,
+            )
+            .join('; ')}.`
+        : 'There are no previous MMSE scores for this patient (this is the first).';
+
+    const prompt = [
+      'You are a clinical assistant helping dementia caregivers interpret a Mini-Mental State Examination (MMSE) result.',
+      'The MMSE is scored 0-30 (higher is better); 24-30 normal, 18-23 mild impairment, 10-17 moderate, below 10 severe.',
+      `The patient just scored ${current.score}/30.`,
+      historyLine,
+      'Judge whether the patient is improving, stable, or declining versus the previous scores.',
+      'Respond with STRICT JSON only, no markdown fences, matching exactly this shape:',
+      '{"summary": "<2-3 sentence plain-language summary of what this score means for a family caregiver>", "trend": "<one of: improving | stable | declining>", "trendNote": "<1 sentence comparing to previous scores; if none, say this is the first recorded test>", "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>"}',
+      'Rules: never diagnose; use warm, non-alarming language; a single score is only a snapshot.',
+    ].join('\n');
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 700,
+            responseMimeType: 'application/json',
+          },
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Gemini error ${response.status}: ${await response.text()}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const rawText =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || '')
+        .join('') || '';
+    const jsonText = rawText
+      .replace(/^```(?:json)?/m, '')
+      .replace(/```\s*$/m, '')
+      .trim();
+
+    let parsed: {
+      summary?: string;
+      trend?: string;
+      trendNote?: string;
+      concerns?: string[];
+      recommendation?: string;
+    };
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      throw new Error(`Unparseable Gemini analysis: ${rawText.slice(0, 200)}`);
+    }
+
+    const aiAssessment = {
+      score: current.score,
+      maxScore: 30,
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      trend: this.normalizeTrend(parsed.trend),
+      trendNote: typeof parsed.trendNote === 'string' ? parsed.trendNote : '',
+      concerns: Array.isArray(parsed.concerns)
+        ? parsed.concerns.filter((c) => typeof c === 'string').slice(0, 6)
+        : [],
+      recommendation:
+        typeof parsed.recommendation === 'string' ? parsed.recommendation : '',
+      model: 'gemini-2.5-flash',
+      analyzedAt: new Date().toISOString(),
+    };
+
+    await this.prisma.mMSETest.update({
+      where: { id: mmseId },
+      data: { aiAssessment: aiAssessment as Prisma.InputJsonValue },
+    });
+    this.logger.log(`MMSE AI assessment stored for ${mmseId}`);
+
+    await this.notifyCaregivers(
+      patientId,
+      'MMSE assessment ready',
+      `AI review of the latest MMSE (${current.score}/30) is ready. Open Test History to see it.`,
+      'MMSE_TEST_ANALYZED',
+      { mmseId, score: current.score, trend: aiAssessment.trend },
+    );
   }
 
   async assignMmse(doctorId: string, role: string, patientId: string) {
@@ -882,7 +1050,13 @@ export class ClinicalService {
       where: { patientId },
       // Return stored answers so caregivers can see the question-by-question
       // breakdown (also used by the PDF doctor-visit report).
-      select: { id: true, score: true, createdAt: true, answers: true },
+      select: {
+        id: true,
+        score: true,
+        createdAt: true,
+        answers: true,
+        aiAssessment: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -985,7 +1159,13 @@ export class ClinicalService {
   async getMyMmseHistory(patientId: string) {
     return this.prisma.mMSETest.findMany({
       where: { patientId },
-      select: { id: true, score: true, createdAt: true, answers: true },
+      select: {
+        id: true,
+        score: true,
+        createdAt: true,
+        answers: true,
+        aiAssessment: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

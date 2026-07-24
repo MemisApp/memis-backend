@@ -485,6 +485,7 @@ model MMSETest {
   patientId         String
   score             Int
   answers           Json
+  aiAssessment      Json?
   assignedByDoctor  String?
   createdAt         DateTime @default(now())
 

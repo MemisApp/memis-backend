@@ -20,6 +20,7 @@ describe('AiService', () => {
     contact: { findMany: jest.fn() },
     anamneze: { findMany: jest.fn() },
     mMSETest: { findMany: jest.fn() },
+    clockTest: { findMany: jest.fn().mockResolvedValue([]) },
     treatment: { findMany: jest.fn() },
     medication: { findMany: jest.fn().mockResolvedValue([]) },
     reminder: { findMany: jest.fn().mockResolvedValue([]) },
@@ -69,6 +70,7 @@ describe('AiService', () => {
   const emptyClinical = () => {
     mockPrisma.anamneze.findMany.mockResolvedValue([]);
     mockPrisma.mMSETest.findMany.mockResolvedValue([]);
+    mockPrisma.clockTest.findMany.mockResolvedValue([]);
     mockPrisma.treatment.findMany.mockResolvedValue([]);
     mockPrisma.medication.findMany.mockResolvedValue([]);
     mockPrisma.reminder.findMany.mockResolvedValue([]);

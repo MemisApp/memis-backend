@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotifyService } from '../../common/notify/notify.service';
 import { UpsertJournalEntryDto } from './dto/upsert-journal-entry.dto';
 
 @Injectable()
 export class JournalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notify: NotifyService,
+  ) {}
 
   private async ensureCaregiverAccess(caregiverId: string, patientId: string) {
     const link = await this.prisma.patientCaregiver.findUnique({
@@ -53,15 +57,42 @@ export class JournalService {
       note: dto.note ?? null,
     };
 
-    if (existing) {
-      return this.prisma.journalEntry.update({
-        where: { id: existing.id },
-        data,
-      });
+    const entry = existing
+      ? await this.prisma.journalEntry.update({
+          where: { id: existing.id },
+          data,
+        })
+      : await this.prisma.journalEntry.create({
+          data: { patientId, entryDate, ...data },
+        });
+
+    if (authorId === null) {
+      await this.notifyPatientJournalFilled(patientId, entry.id, !existing);
     }
-    return this.prisma.journalEntry.create({
-      data: { patientId, entryDate, ...data },
-    });
+
+    return entry;
+  }
+
+  private async notifyPatientJournalFilled(
+    patientId: string,
+    entryId: string,
+    isNew: boolean,
+  ) {
+    try {
+      const patient = await this.prisma.patient.findUnique({
+        where: { id: patientId },
+        select: { firstName: true },
+      });
+      const name = patient?.firstName || 'Your patient';
+      await this.notify.notifyCaregivers(patientId, {
+        title: isNew ? 'Journal entry added' : 'Journal entry updated',
+        body: `${name} ${isNew ? 'filled out' : 'updated'} today's journal.`,
+        type: 'JOURNAL_FILLED',
+        metadata: { entryId },
+      });
+    } catch {
+      return;
+    }
   }
 
   async createForCaregiver(

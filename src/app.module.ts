@@ -26,6 +26,7 @@ import { InvitesModule } from './modules/invites/invites.module';
 import { MailModule } from './common/mail/mail.module';
 import { SafetyModule } from './modules/safety/safety.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
+import { ActivityModule } from './modules/activity/activity.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { MonitoringModule } from './modules/monitoring/monitoring.module';
     InvitesModule,
     SafetyModule,
     MonitoringModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [

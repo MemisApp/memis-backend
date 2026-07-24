@@ -68,8 +68,15 @@ export class AiService {
   }
 
   private async getPatientClinicalSummary(patientId: string): Promise<string> {
-    const [anamneze, mmseTests, treatments, medications, reminders, journal] =
-      await Promise.all([
+    const [
+      anamneze,
+      mmseTests,
+      clockTests,
+      treatments,
+      medications,
+      reminders,
+      journal,
+    ] = await Promise.all([
         this.prisma.anamneze.findMany({
           where: { patientId },
           orderBy: { updatedAt: 'desc' },
@@ -80,7 +87,13 @@ export class AiService {
           where: { patientId },
           orderBy: { createdAt: 'desc' },
           take: 5,
-          select: { score: true, createdAt: true },
+          select: { score: true, createdAt: true, aiAssessment: true },
+        }),
+        this.prisma.clockTest.findMany({
+          where: { patientId },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { createdAt: true, metadata: true },
         }),
         this.prisma.treatment.findMany({
           where: { patientId },
@@ -126,11 +139,57 @@ export class AiService {
 
     if (mmseTests.length > 0) {
       lines.push('--- MMSE Scores (most recent first) ---');
-      for (const test of mmseTests) {
+      mmseTests.forEach((test, index) => {
         lines.push(
           `[${new Date(test.createdAt).toLocaleDateString()}] Score: ${test.score}/30`,
         );
-      }
+        if (index === 0) {
+          const a =
+            test.aiAssessment && typeof test.aiAssessment === 'object'
+              ? (test.aiAssessment as Record<string, unknown>)
+              : null;
+          if (a) {
+            const trend = typeof a.trend === 'string' ? a.trend : '';
+            const summary = typeof a.summary === 'string' ? a.summary : '';
+            if (trend || summary) {
+              lines.push(
+                `   AI assessment${trend ? ` (trend: ${trend})` : ''}: ${summary}`,
+              );
+            }
+          }
+        }
+      });
+    }
+
+    if (clockTests.length > 0) {
+      lines.push('--- Clock Drawing Test (most recent first) ---');
+      clockTests.forEach((test, index) => {
+        const meta =
+          test.metadata && typeof test.metadata === 'object'
+            ? (test.metadata as Record<string, unknown>)
+            : {};
+        const analysis =
+          meta.aiAnalysis && typeof meta.aiAnalysis === 'object'
+            ? (meta.aiAnalysis as Record<string, unknown>)
+            : null;
+        const score =
+          analysis && typeof analysis.score === 'number' ? analysis.score : null;
+        lines.push(
+          `[${new Date(test.createdAt).toLocaleDateString()}]${
+            score !== null ? ` AI score: ${score}/5` : ' (not yet analyzed)'
+          }`,
+        );
+        if (index === 0 && analysis) {
+          const trend = typeof analysis.trend === 'string' ? analysis.trend : '';
+          const summary =
+            typeof analysis.summary === 'string' ? analysis.summary : '';
+          if (trend || summary) {
+            lines.push(
+              `   AI assessment${trend ? ` (trend: ${trend})` : ''}: ${summary}`,
+            );
+          }
+        }
+      });
     }
 
     if (treatments.length > 0) {

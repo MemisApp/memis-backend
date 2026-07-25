@@ -1,4 +1,11 @@
 import en from './notifications/en.json';
+import ru from './notifications/ru.json';
+import zh from './notifications/zh.json';
+import de from './notifications/de.json';
+import fr from './notifications/fr.json';
+import es from './notifications/es.json';
+import ja from './notifications/ja.json';
+import ko from './notifications/ko.json';
 
 export type NotifyLanguage =
   | 'en'
@@ -14,6 +21,13 @@ type Tree = { [key: string]: string | Tree };
 
 const RESOURCES: Partial<Record<NotifyLanguage, Tree>> = {
   en: en as Tree,
+  ru: ru as Tree,
+  zh: zh as Tree,
+  de: de as Tree,
+  fr: fr as Tree,
+  es: es as Tree,
+  ja: ja as Tree,
+  ko: ko as Tree,
 };
 
 const DEFAULT: NotifyLanguage = 'en';

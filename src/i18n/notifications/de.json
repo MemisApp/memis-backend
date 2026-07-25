@@ -1,0 +1,108 @@
+{
+    "doctorAssigned": {
+      "title": "Neuer Arzt zugewiesen",
+      "body": "Ein Arzt hat Ihnen neue Untersuchungen (MMSE und Uhrentest) zugewiesen."
+    },
+    "doctorAssignedCaregiver": {
+      "title": "Ihrem Patienten wurde ein Arzt zugewiesen",
+      "body": "Neue MMSE- und Uhrentest-Aufgaben wurden zugewiesen."
+    },
+    "clockCompleted": {
+      "title": "Uhrentest abgeschlossen",
+      "body": "Ein Patient hat den Uhrentest abgeschlossen."
+    },
+    "clockAnalyzed": {
+      "title": "Uhrentest analysiert",
+      "body": "Die KI-Auswertung der neuesten Uhrzeichnung ist bereit. Öffnen Sie den Testverlauf, um sie anzusehen."
+    },
+    "clockAnalyzedScored": {
+      "title": "Uhrentest analysiert",
+      "body": "Die KI-Auswertung der neuesten Uhrzeichnung ist bereit (Bewertung {{score}}/5). Öffnen Sie den Testverlauf, um sie anzusehen."
+    },
+    "mmseDrop": {
+      "title": "Warnung vor kognitivem Abbau",
+      "body": "Der letzte MMSE-Wert ist um {{scoreDrop}} Punkte gesunken (jetzt {{score}}/30). Ziehen Sie in Betracht, den Arzt zu kontaktieren."
+    },
+    "mmseCompleted": {
+      "title": "MMSE abgeschlossen",
+      "body": "MMSE mit einer Punktzahl von {{score}}/30 abgeschlossen."
+    },
+    "mmseDropDoctor": {
+      "title": "Warnung: MMSE-Wert gesunken",
+      "body": "Der MMSE-Wert ist um {{scoreDrop}} Punkte gesunken. Bitte überprüfen Sie den Patienten umgehend."
+    },
+    "mmseCompletedDoctor": {
+      "title": "MMSE abgeschlossen",
+      "body": "Der Patient hat den MMSE-Test abgeschlossen."
+    },
+    "mmseAnalyzed": {
+      "title": "MMSE-Auswertung bereit",
+      "body": "Die KI-Auswertung des neuesten MMSE ({{score}}/30) ist bereit. Öffnen Sie den Testverlauf, um sie anzusehen."
+    },
+    "mmseAssigned": {
+      "title": "MMSE zugewiesen",
+      "body": "Ihr Arzt hat Ihnen einen neuen MMSE-Test zugewiesen. Bitte führen Sie ihn gemeinsam mit Ihrer Betreuungsperson durch."
+    },
+    "mmseAssignedCaregiver": {
+      "title": "MMSE für {{name}} zugewiesen",
+      "body": "Ein Arzt hat einen MMSE-Test zugewiesen. Bitte helfen Sie {{name}}, ihn abzuschließen."
+    },
+    "clockAssigned": {
+      "title": "Uhrentest zugewiesen",
+      "body": "Ihr Arzt hat Ihnen einen neuen Uhrentest zugewiesen."
+    },
+    "clockAssignedCaregiver": {
+      "title": "Uhrentest für {{name}} zugewiesen",
+      "body": "Ein Arzt hat einen Uhrentest für {{name}} zugewiesen."
+    },
+    "treatmentAssigned": {
+      "title": "Neuer Behandlungsplan zugewiesen",
+      "body": "Ein Arzt hat einen neuen Behandlungsplan zugewiesen."
+    },
+    "clockReviewed": {
+      "title": "Uhrentest überprüft",
+      "body": "Ihr Arzt hat Ihren Uhrentest überprüft (Bewertung {{rating}}/5)."
+    },
+    "newMessage": {
+      "title": "Neue Nachricht von {{sender}}",
+      "body": "{{text}}"
+    },
+    "leftSafeArea": {
+      "title": "⚠️ Sicheren Bereich verlassen",
+      "body": "{{name}} scheint den sicheren Bereich verlassen zu haben{{distanceText}}. Tippen Sie hier, um den Standort anzuzeigen."
+    },
+    "sos": {
+      "title": "🆘 SOS – Hilfe benötigt",
+      "body": "{{name}} hat den SOS-Knopf gedrückt. Bitte kontaktieren Sie die Person jetzt.",
+      "bodyWithLocation": "{{name}} hat den SOS-Knopf gedrückt. Tippen Sie hier, um den Standort anzuzeigen und die Person sofort anzurufen."
+    },
+    "cognitiveDecline": {
+      "title": "Möglicher kognitiver Abbau",
+      "body": "Der letzte Gedächtnistest von {{name}} ist um {{points}} Punkte gesunken (jetzt {{score}}/30). Erwägen Sie, dies mit dem Arzt zu besprechen."
+    },
+    "careDigest": {
+      "titleDaily": "Tägliches Update zu {{name}}",
+      "titleWeekly": "Wöchentliches Update zu {{name}}",
+      "body": "{{summary}}"
+    },
+    "medNotLogged": {
+      "title": "Medikamenteneinnahme nicht erfasst",
+      "body": "{{name}} hat heute {{missed}} Medikamentendosis(en) nicht als eingenommen markiert. Bitte sehen Sie nach."
+    },
+    "medLow": {
+      "title": "Medikament geht zur Neige",
+      "body": "{{name}}s Medikament {{medName}} wird knapp (noch {{quantity}} übrig). Zeit zum Nachfüllen."
+    },
+    "missedCheckIn": {
+      "title": "Täglicher Check-in verpasst",
+      "body": "{{name}} hat sich heute nicht gemeldet. Bitte stellen Sie sicher, dass es der Person gut geht."
+    },
+    "journalAdded": {
+      "title": "Tagebucheintrag hinzugefügt",
+      "body": "{{name}} hat das heutige Tagebuch ausgefüllt."
+    },
+    "journalUpdated": {
+      "title": "Tagebucheintrag aktualisiert",
+      "body": "{{name}} hat das heutige Tagebuch aktualisiert."
+    }
+}

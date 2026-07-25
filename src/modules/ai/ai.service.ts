@@ -402,6 +402,10 @@ export class AiService {
         return 'French';
       case 'es':
         return 'Spanish';
+      case 'ja':
+        return 'Japanese';
+      case 'ko':
+        return 'Korean';
       default:
         return null;
     }

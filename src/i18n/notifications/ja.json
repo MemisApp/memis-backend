@@ -1,0 +1,108 @@
+{
+  "doctorAssigned": {
+    "title": "新しい担当医が割り当てられました",
+    "body": "担当医により、新しい評価（MMSE と時計描画テスト）が割り当てられました。"
+  },
+  "doctorAssignedCaregiver": {
+    "title": "患者に担当医が割り当てられました",
+    "body": "新しい MMSE と時計描画テストが割り当てられました。"
+  },
+  "clockCompleted": {
+    "title": "時計描画テスト完了",
+    "body": "患者が時計描画テストを完了しました。"
+  },
+  "clockAnalyzed": {
+    "title": "時計描画テストを分析しました",
+    "body": "最新の時計描画テストの AI 分析が完了しました。テスト履歴を開いてご確認ください。"
+  },
+  "clockAnalyzedScored": {
+    "title": "時計描画テストを分析しました",
+    "body": "最新の時計描画テストの AI 分析が完了しました（スコア {{score}}/5）。テスト履歴を開いてご確認ください。"
+  },
+  "mmseDrop": {
+    "title": "認知機能低下の警告",
+    "body": "最新の MMSE スコアが {{scoreDrop}} 点低下しました（現在 {{score}}/30）。担当医へのご相談をご検討ください。"
+  },
+  "mmseCompleted": {
+    "title": "MMSE 完了",
+    "body": "MMSE が完了しました（スコア {{score}}/30）。"
+  },
+  "mmseDropDoctor": {
+    "title": "MMSE スコア低下アラート",
+    "body": "MMSE スコアが {{scoreDrop}} 点低下しました。至急、患者をご確認ください。"
+  },
+  "mmseCompletedDoctor": {
+    "title": "MMSE 完了",
+    "body": "患者が MMSE テストを完了しました。"
+  },
+  "mmseAnalyzed": {
+    "title": "MMSE 評価が完了しました",
+    "body": "最新の MMSE（{{score}}/30）の AI 分析が完了しました。テスト履歴を開いてご確認ください。"
+  },
+  "mmseAssigned": {
+    "title": "MMSE が割り当てられました",
+    "body": "担当医が新しい MMSE テストを割り当てました。介護者と一緒に完了してください。"
+  },
+  "mmseAssignedCaregiver": {
+    "title": "{{name}} に MMSE が割り当てられました",
+    "body": "担当医が MMSE テストを割り当てました。{{name}} が完了できるようサポートしてください。"
+  },
+  "clockAssigned": {
+    "title": "時計描画テストが割り当てられました",
+    "body": "担当医が新しい時計描画テストを割り当てました。"
+  },
+  "clockAssignedCaregiver": {
+    "title": "{{name}} に時計描画テストが割り当てられました",
+    "body": "担当医が {{name}} に時計描画テストを割り当てました。"
+  },
+  "treatmentAssigned": {
+    "title": "新しい治療計画が割り当てられました",
+    "body": "担当医が新しい治療計画を割り当てました。"
+  },
+  "clockReviewed": {
+    "title": "時計描画テストを確認しました",
+    "body": "担当医が時計描画テストを確認しました（評価 {{rating}}/5）。"
+  },
+  "newMessage": {
+    "title": "{{sender}} から新しいメッセージ",
+    "body": "{{text}}"
+  },
+  "leftSafeArea": {
+    "title": "⚠️ 安全エリアを離れました",
+    "body": "{{name}} が安全エリアを離れた可能性があります{{distanceText}}。タップして現在地を確認してください。"
+  },
+  "sos": {
+    "title": "🆘 SOS — 支援が必要です",
+    "body": "{{name}} が SOS ボタンを押しました。すぐに連絡してください。",
+    "bodyWithLocation": "{{name}} が SOS ボタンを押しました。タップして現在地を確認し、すぐに連絡してください。"
+  },
+  "cognitiveDecline": {
+    "title": "認知機能低下の可能性",
+    "body": "{{name}} の最新の記憶テストが {{points}} 点低下しました（現在 {{score}}/30）。担当医への相談をご検討ください。"
+  },
+  "careDigest": {
+    "titleDaily": "{{name}} の本日の更新",
+    "titleWeekly": "{{name}} の週間更新",
+    "body": "{{summary}}"
+  },
+  "medNotLogged": {
+    "title": "服薬が記録されていません",
+    "body": "{{name}} は本日 {{missed}} 回分の服薬が「服用済み」と記録されていません。状況をご確認ください。"
+  },
+  "medLow": {
+    "title": "薬の残量が少なくなっています",
+    "body": "{{name}} の {{medName}} の残量が少なくなっています（残り {{quantity}}）。補充をご検討ください。"
+  },
+  "missedCheckIn": {
+    "title": "本日のチェックイン未実施",
+    "body": "{{name}} は本日のチェックインを行っていません。無事かどうかご確認ください。"
+  },
+  "journalAdded": {
+    "title": "日誌が追加されました",
+    "body": "{{name}} が本日の日誌を記入しました。"
+  },
+  "journalUpdated": {
+    "title": "日誌が更新されました",
+    "body": "{{name}} が本日の日誌を更新しました。"
+  }
+}

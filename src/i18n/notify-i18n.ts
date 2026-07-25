@@ -1,6 +1,14 @@
 import en from './notifications/en.json';
 
-export type NotifyLanguage = 'en' | 'ru' | 'zh' | 'de' | 'fr' | 'es';
+export type NotifyLanguage =
+  | 'en'
+  | 'ru'
+  | 'zh'
+  | 'de'
+  | 'fr'
+  | 'es'
+  | 'ja'
+  | 'ko';
 
 type Tree = { [key: string]: string | Tree };
 
@@ -12,9 +20,9 @@ const DEFAULT: NotifyLanguage = 'en';
 
 function normalizeLanguage(value?: string | null): NotifyLanguage {
   const v = (value || '').toLowerCase();
-  return (['en', 'ru', 'zh', 'de', 'fr', 'es'] as const).includes(
-    v as NotifyLanguage,
-  )
+  return (
+    ['en', 'ru', 'zh', 'de', 'fr', 'es', 'ja', 'ko'] as const
+  ).includes(v as NotifyLanguage)
     ? (v as NotifyLanguage)
     : DEFAULT;
 }

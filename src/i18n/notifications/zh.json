@@ -1,0 +1,108 @@
+{
+  "doctorAssigned": {
+    "title": "已分配新医生",
+    "body": "医生为您分配了新的评估（MMSE 和画钟测试）。"
+  },
+  "doctorAssignedCaregiver": {
+    "title": "您的患者已分配医生",
+    "body": "已分配新的 MMSE 和画钟测试。"
+  },
+  "clockCompleted": {
+    "title": "画钟测试已完成",
+    "body": "一名患者已完成画钟测试。"
+  },
+  "clockAnalyzed": {
+    "title": "画钟测试已分析",
+    "body": "最新画钟测试的 AI 分析已完成。打开测试历史记录即可查看。"
+  },
+  "clockAnalyzedScored": {
+    "title": "画钟测试已分析",
+    "body": "最新画钟测试的 AI 分析已完成（得分 {{score}}/5）。打开测试历史记录即可查看。"
+  },
+  "mmseDrop": {
+    "title": "认知能力下降警报",
+    "body": "最新 MMSE 评分下降了 {{scoreDrop}} 分（当前为 {{score}}/30）。建议联系医生。"
+  },
+  "mmseCompleted": {
+    "title": "MMSE 已完成",
+    "body": "MMSE 已完成，得分为 {{score}}/30。"
+  },
+  "mmseDropDoctor": {
+    "title": "MMSE 评分下降警报",
+    "body": "MMSE 评分下降了 {{scoreDrop}} 分。请尽快评估患者。"
+  },
+  "mmseCompletedDoctor": {
+    "title": "MMSE 已完成",
+    "body": "患者已完成 MMSE 测试。"
+  },
+  "mmseAnalyzed": {
+    "title": "MMSE 评估已完成",
+    "body": "最新 MMSE（{{score}}/30）的 AI 分析已完成。打开测试历史记录即可查看。"
+  },
+  "mmseAssigned": {
+    "title": "已分配 MMSE 测试",
+    "body": "您的医生为您分配了新的 MMSE 测试。请在照护者的协助下完成。"
+  },
+  "mmseAssignedCaregiver": {
+    "title": "已为 {{name}} 分配 MMSE 测试",
+    "body": "医生分配了一项 MMSE 测试。请协助 {{name}} 完成测试。"
+  },
+  "clockAssigned": {
+    "title": "已分配画钟测试",
+    "body": "您的医生为您分配了新的画钟测试。"
+  },
+  "clockAssignedCaregiver": {
+    "title": "已为 {{name}} 分配画钟测试",
+    "body": "医生为 {{name}} 分配了一项画钟测试。"
+  },
+  "treatmentAssigned": {
+    "title": "已分配新的治疗方案",
+    "body": "医生分配了新的治疗计划。"
+  },
+  "clockReviewed": {
+    "title": "画钟测试已审核",
+    "body": "您的医生已审核您的画钟测试（评分 {{rating}}/5）。"
+  },
+  "newMessage": {
+    "title": "来自 {{sender}} 的新消息",
+    "body": "{{text}}"
+  },
+  "leftSafeArea": {
+    "title": "⚠️ 已离开安全区域",
+    "body": "{{name}} 似乎已离开安全区域{{distanceText}}。点击查看其位置。"
+  },
+  "sos": {
+    "title": "🆘 SOS — 需要帮助",
+    "body": "{{name}} 按下了 SOS 按钮。请立即联系他们。",
+    "bodyWithLocation": "{{name}} 按下了 SOS 按钮。点击查看其位置并立即拨打电话。"
+  },
+  "cognitiveDecline": {
+    "title": "可能出现认知能力下降",
+    "body": "{{name}} 最近一次记忆测试下降了 {{points}} 分（当前为 {{score}}/30）。建议与其医生讨论。"
+  },
+  "careDigest": {
+    "titleDaily": "{{name}} 的每日更新",
+    "titleWeekly": "{{name}} 的每周更新",
+    "body": "{{summary}}"
+  },
+  "medNotLogged": {
+    "title": "服药记录未登记",
+    "body": "{{name}} 今天有 {{missed}} 次服药尚未标记为已服用。请确认其情况。"
+  },
+  "medLow": {
+    "title": "药物即将用完",
+    "body": "{{name}} 的 {{medName}} 即将用完（剩余 {{quantity}}）。该补充药物了。"
+  },
+  "missedCheckIn": {
+    "title": "错过每日签到",
+    "body": "{{name}} 今天尚未签到。请确认其一切正常。"
+  },
+  "journalAdded": {
+    "title": "已添加日记记录",
+    "body": "{{name}} 已填写今天的日记。"
+  },
+  "journalUpdated": {
+    "title": "日记记录已更新",
+    "body": "{{name}} 已更新今天的日记。"
+  }
+}

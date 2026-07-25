@@ -1,0 +1,108 @@
+{
+  "doctorAssigned": {
+    "title": "Nouveau médecin attribué",
+    "body": "Un médecin vous a attribué de nouvelles évaluations (MMSE et test de l’horloge)."
+  },
+  "doctorAssignedCaregiver": {
+    "title": "Un médecin a été attribué à votre patient",
+    "body": "De nouveaux tests MMSE et de dessin de l’horloge ont été attribués."
+  },
+  "clockCompleted": {
+    "title": "Test de l’horloge terminé",
+    "body": "Un patient a terminé le test de dessin de l’horloge."
+  },
+  "clockAnalyzed": {
+    "title": "Dessin de l’horloge analysé",
+    "body": "L’analyse par IA du dernier dessin de l’horloge est prête. Ouvrez l’historique des tests pour la consulter."
+  },
+  "clockAnalyzedScored": {
+    "title": "Dessin de l’horloge analysé",
+    "body": "L’analyse par IA du dernier dessin de l’horloge est prête (score : {{score}}/5). Ouvrez l’historique des tests pour la consulter."
+  },
+  "mmseDrop": {
+    "title": "Alerte de déclin cognitif",
+    "body": "Le dernier score MMSE a diminué de {{scoreDrop}} points (désormais {{score}}/30). Envisagez de contacter le médecin."
+  },
+  "mmseCompleted": {
+    "title": "MMSE terminé",
+    "body": "MMSE terminé avec un score de {{score}}/30."
+  },
+  "mmseDropDoctor": {
+    "title": "Alerte de baisse du score MMSE",
+    "body": "Le score MMSE a diminué de {{scoreDrop}} points. Examinez le patient en urgence."
+  },
+  "mmseCompletedDoctor": {
+    "title": "MMSE terminé",
+    "body": "Le patient a terminé le test MMSE."
+  },
+  "mmseAnalyzed": {
+    "title": "Évaluation MMSE prête",
+    "body": "L’analyse par IA du dernier MMSE ({{score}}/30) est prête. Ouvrez l’historique des tests pour la consulter."
+  },
+  "mmseAssigned": {
+    "title": "MMSE attribué",
+    "body": "Votre médecin vous a attribué un nouveau test MMSE. Veuillez le réaliser avec votre aidant."
+  },
+  "mmseAssignedCaregiver": {
+    "title": "MMSE attribué à {{name}}",
+    "body": "Un médecin a attribué un test MMSE. Veuillez aider {{name}} à le réaliser."
+  },
+  "clockAssigned": {
+    "title": "Test de l’horloge attribué",
+    "body": "Votre médecin vous a attribué un nouveau test de dessin de l’horloge."
+  },
+  "clockAssignedCaregiver": {
+    "title": "Test de l’horloge attribué à {{name}}",
+    "body": "Un médecin a attribué un test de dessin de l’horloge à {{name}}."
+  },
+  "treatmentAssigned": {
+    "title": "Nouveau traitement attribué",
+    "body": "Un médecin a attribué un nouveau plan de traitement."
+  },
+  "clockReviewed": {
+    "title": "Test de l’horloge examiné",
+    "body": "Votre médecin a examiné votre test de dessin de l’horloge (note : {{rating}}/5)."
+  },
+  "newMessage": {
+    "title": "Nouveau message de {{sender}}",
+    "body": "{{text}}"
+  },
+  "leftSafeArea": {
+    "title": "⚠️ Sortie d’une zone sécurisée",
+    "body": "{{name}} semble avoir quitté sa zone sécurisée{{distanceText}}. Appuyez pour voir sa position."
+  },
+  "sos": {
+    "title": "🆘 SOS — aide nécessaire",
+    "body": "{{name}} a appuyé sur le bouton SOS. Veuillez contacter cette personne maintenant.",
+    "bodyWithLocation": "{{name}} a appuyé sur le bouton SOS. Appuyez pour voir sa position et l’appeler immédiatement."
+  },
+  "cognitiveDecline": {
+    "title": "Déclin cognitif possible",
+    "body": "Le dernier test de mémoire de {{name}} a diminué de {{points}} points (désormais {{score}}/30). Envisagez d’en discuter avec son médecin."
+  },
+  "careDigest": {
+    "titleDaily": "Mise à jour quotidienne concernant {{name}}",
+    "titleWeekly": "Mise à jour hebdomadaire concernant {{name}}",
+    "body": "{{summary}}"
+  },
+  "medNotLogged": {
+    "title": "Prise de médicament non enregistrée",
+    "body": "{{name}} a aujourd’hui {{missed}} dose(s) de médicament non marquée(s) comme prise(s). Veuillez vérifier que tout va bien."
+  },
+  "medLow": {
+    "title": "Stock de médicament faible",
+    "body": "Le stock de {{medName}} de {{name}} est faible (il en reste {{quantity}}). Il est temps de le renouveler."
+  },
+  "missedCheckIn": {
+    "title": "Pointage quotidien manqué",
+    "body": "{{name}} n’a pas effectué son pointage aujourd’hui. Veuillez vous assurer que tout va bien."
+  },
+  "journalAdded": {
+    "title": "Entrée de journal ajoutée",
+    "body": "{{name}} a rempli le journal d’aujourd’hui."
+  },
+  "journalUpdated": {
+    "title": "Entrée de journal mise à jour",
+    "body": "{{name}} a mis à jour le journal d’aujourd’hui."
+  }
+}

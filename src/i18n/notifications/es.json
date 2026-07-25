@@ -1,0 +1,108 @@
+{
+  "doctorAssigned": {
+    "title": "Nuevo médico asignado",
+    "body": "Un médico te ha asignado nuevas evaluaciones (MMSE y test del reloj)."
+  },
+  "doctorAssignedCaregiver": {
+    "title": "Se ha asignado un médico a tu paciente",
+    "body": "Se han asignado nuevos tests MMSE y de dibujo del reloj."
+  },
+  "clockCompleted": {
+    "title": "Test del reloj completado",
+    "body": "Un paciente ha completado el test de dibujo del reloj."
+  },
+  "clockAnalyzed": {
+    "title": "Dibujo del reloj analizado",
+    "body": "La revisión por IA del último dibujo del reloj está lista. Abre el historial de tests para verla."
+  },
+  "clockAnalyzedScored": {
+    "title": "Dibujo del reloj analizado",
+    "body": "La revisión por IA del último dibujo del reloj está lista (puntuación: {{score}}/5). Abre el historial de tests para verla."
+  },
+  "mmseDrop": {
+    "title": "Alerta de deterioro cognitivo",
+    "body": "La última puntuación MMSE ha disminuido {{scoreDrop}} puntos (ahora {{score}}/30). Considera contactar con el médico."
+  },
+  "mmseCompleted": {
+    "title": "MMSE completado",
+    "body": "MMSE completado con una puntuación de {{score}}/30."
+  },
+  "mmseDropDoctor": {
+    "title": "Alerta de disminución de la puntuación MMSE",
+    "body": "La puntuación MMSE ha disminuido {{scoreDrop}} puntos. Revisa al paciente urgentemente."
+  },
+  "mmseCompletedDoctor": {
+    "title": "MMSE completado",
+    "body": "El paciente ha completado el test MMSE."
+  },
+  "mmseAnalyzed": {
+    "title": "Evaluación MMSE lista",
+    "body": "La revisión por IA del último MMSE ({{score}}/30) está lista. Abre el historial de tests para verla."
+  },
+  "mmseAssigned": {
+    "title": "MMSE asignado",
+    "body": "Tu médico te ha asignado un nuevo test MMSE. Complétalo con tu cuidador."
+  },
+  "mmseAssignedCaregiver": {
+    "title": "MMSE asignado a {{name}}",
+    "body": "Un médico ha asignado un test MMSE. Ayuda a {{name}} a completarlo."
+  },
+  "clockAssigned": {
+    "title": "Test del reloj asignado",
+    "body": "Tu médico te ha asignado un nuevo test de dibujo del reloj."
+  },
+  "clockAssignedCaregiver": {
+    "title": "Test del reloj asignado a {{name}}",
+    "body": "Un médico ha asignado un test de dibujo del reloj a {{name}}."
+  },
+  "treatmentAssigned": {
+    "title": "Nuevo tratamiento asignado",
+    "body": "Un médico ha asignado un nuevo plan de tratamiento."
+  },
+  "clockReviewed": {
+    "title": "Test del reloj revisado",
+    "body": "Tu médico ha revisado tu test de dibujo del reloj (valoración: {{rating}}/5)."
+  },
+  "newMessage": {
+    "title": "Nuevo mensaje de {{sender}}",
+    "body": "{{text}}"
+  },
+  "leftSafeArea": {
+    "title": "⚠️ Ha salido de una zona segura",
+    "body": "Parece que {{name}} ha salido de su zona segura{{distanceText}}. Toca para ver su ubicación."
+  },
+  "sos": {
+    "title": "🆘 SOS — se necesita ayuda",
+    "body": "{{name}} ha pulsado el botón SOS. Contacta con esta persona ahora.",
+    "bodyWithLocation": "{{name}} ha pulsado el botón SOS. Toca para ver su ubicación y llamarla ahora."
+  },
+  "cognitiveDecline": {
+    "title": "Posible deterioro cognitivo",
+    "body": "El último test de memoria de {{name}} ha disminuido {{points}} puntos (ahora {{score}}/30). Considera hablarlo con su médico."
+  },
+  "careDigest": {
+    "titleDaily": "Actualización diaria sobre {{name}}",
+    "titleWeekly": "Actualización semanal sobre {{name}}",
+    "body": "{{summary}}"
+  },
+  "medNotLogged": {
+    "title": "Medicación no registrada",
+    "body": "{{name}} tiene hoy {{missed}} dosis de medicación sin marcar como tomada(s). Comprueba que todo esté bien."
+  },
+  "medLow": {
+    "title": "Queda poca medicación",
+    "body": "Queda poca cantidad de {{medName}} de {{name}} (quedan {{quantity}}). Es hora de reponerla."
+  },
+  "missedCheckIn": {
+    "title": "Registro diario no realizado",
+    "body": "{{name}} no ha realizado hoy su registro diario. Asegúrate de que esté bien."
+  },
+  "journalAdded": {
+    "title": "Entrada de diario añadida",
+    "body": "{{name}} ha completado el diario de hoy."
+  },
+  "journalUpdated": {
+    "title": "Entrada de diario actualizada",
+    "body": "{{name}} ha actualizado el diario de hoy."
+  }
+}

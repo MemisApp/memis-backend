@@ -429,6 +429,13 @@ export class ClinicalService {
    * marked as not a diagnosis. Requires a raster (PNG/JPEG/WebP) data URL;
    * legacy SVG submissions are skipped.
    */
+  private extractJsonObject(raw: string): string {
+    const noFence = raw.replace(/```(?:json)?/gi, '').trim();
+    const start = noFence.indexOf('{');
+    const end = noFence.lastIndexOf('}');
+    return start !== -1 && end > start ? noFence.slice(start, end + 1) : noFence;
+  }
+
   private clinicalLanguageName(code?: string | null): string | null {
     switch ((code || '').toLowerCase()) {
       case 'en':
@@ -555,8 +562,9 @@ export class ClinicalService {
           ],
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 700,
+            maxOutputTokens: 2048,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       },
@@ -572,7 +580,7 @@ export class ClinicalService {
       data?.candidates?.[0]?.content?.parts
         ?.map((p) => p.text || '')
         .join('') || '';
-    const jsonText = rawText.replace(/^```(?:json)?/m, '').replace(/```\s*$/m, '').trim();
+    const jsonText = this.extractJsonObject(rawText);
 
     let parsed: {
       score?: number;
@@ -802,8 +810,9 @@ export class ClinicalService {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 700,
+            maxOutputTokens: 2048,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       },
@@ -821,10 +830,7 @@ export class ClinicalService {
       data?.candidates?.[0]?.content?.parts
         ?.map((p) => p.text || '')
         .join('') || '';
-    const jsonText = rawText
-      .replace(/^```(?:json)?/m, '')
-      .replace(/```\s*$/m, '')
-      .trim();
+    const jsonText = this.extractJsonObject(rawText);
 
     let parsed: {
       summary?: string;

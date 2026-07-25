@@ -18,4 +18,8 @@ export class CreateMmseTestDto {
   @IsOptional()
   @IsString()
   assignedByDoctor?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
 }

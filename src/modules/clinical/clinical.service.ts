@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import { DoctorPatientStatus, Prisma, Role } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import { Resvg } from '@resvg/resvg-js';
 import { PrismaService } from '../../prisma/prisma.service';
+import { tNotify } from '../../i18n/notify-i18n';
 import { AssignPatientDto } from './dto/assign-patient.dto';
 import { UpdateAssignmentStatusDto } from './dto/update-assignment-status.dto';
 import { UpsertAnamnezeDto } from './dto/upsert-anamneze.dto';
@@ -66,18 +68,33 @@ export class ClinicalService {
   private async createNotification(input: {
     userId?: string;
     patientId?: string;
-    title: string;
-    body: string;
+    titleKey: string;
+    bodyKey: string;
+    params?: Record<string, string | number>;
     type: string;
     actorId?: string;
     metadata?: Record<string, unknown>;
   }) {
+    // Recipient language: users (caregivers/doctors) have a stored language;
+    // patient-device notifications fall back to English (patients set their
+    // language on-device and receive localized local notifications there).
+    let language: string | null = null;
+    if (input.userId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { language: true },
+      });
+      language = u?.language ?? null;
+    }
+    const title = tNotify(language, input.titleKey, input.params);
+    const body = tNotify(language, input.bodyKey, input.params);
+
     await this.prisma.appNotification.create({
       data: {
         userId: input.userId || null,
         patientId: input.patientId || null,
-        title: input.title,
-        body: input.body,
+        title,
+        body,
         type: input.type,
         actorId: input.actorId || null,
         metadata: input.metadata as Prisma.InputJsonValue | undefined,
@@ -91,13 +108,13 @@ export class ClinicalService {
 
     if (input.patientId && !input.userId) {
       this.pushService
-        .sendToPatient(input.patientId, input.title, input.body, data)
+        .sendToPatient(input.patientId, title, body, data)
         .catch((err) => this.logger.error('Patient push failed', err));
     }
 
     if (input.userId) {
       this.pushService
-        .sendToUser(input.userId, input.title, input.body, data)
+        .sendToUser(input.userId, title, body, data)
         .catch((err) => this.logger.error('User push failed', err));
     }
   }
@@ -112,8 +129,9 @@ export class ClinicalService {
 
   private async notifyCaregivers(
     patientId: string,
-    title: string,
-    body: string,
+    titleKey: string,
+    bodyKey: string,
+    params: Record<string, string | number> | undefined,
     type: string,
     metadata?: Record<string, unknown>,
   ) {
@@ -127,8 +145,9 @@ export class ClinicalService {
         this.createNotification({
           userId: c.caregiverId,
           patientId,
-          title,
-          body,
+          titleKey,
+          bodyKey,
+          params,
           type,
           metadata,
         }),
@@ -209,16 +228,17 @@ export class ClinicalService {
 
     await this.createNotification({
       patientId: dto.patientId,
-      title: 'New doctor assigned',
-      body: 'A doctor assigned you new assessments (MMSE and clock test).',
+      titleKey: 'doctorAssigned.title',
+      bodyKey: 'doctorAssigned.body',
       type: 'DOCTOR_ASSIGNED',
       actorId: doctorId,
       metadata: { mmseAssigned: true, clockAssigned: true },
     });
     await this.notifyCaregivers(
       dto.patientId,
-      'A doctor was assigned to your patient',
-      'New MMSE and clock drawing tests have been assigned.',
+      'doctorAssignedCaregiver.title',
+      'doctorAssignedCaregiver.body',
+      undefined,
       'DOCTOR_ASSIGNED_CAREGIVER',
       { mmseAssigned: true, clockAssigned: true },
     );
@@ -371,8 +391,8 @@ export class ClinicalService {
             userId: d.doctorId,
             patientId,
             type: 'CLOCK_TEST_COMPLETED',
-            title: 'Clock test completed',
-            body: 'A patient has completed the clock drawing test.',
+            titleKey: 'clockCompleted.title',
+            bodyKey: 'clockCompleted.body',
             metadata: { clockTestId: test.id },
           }),
         ),
@@ -409,6 +429,61 @@ export class ClinicalService {
    * marked as not a diagnosis. Requires a raster (PNG/JPEG/WebP) data URL;
    * legacy SVG submissions are skipped.
    */
+  private clinicalLanguageName(code?: string | null): string | null {
+    switch ((code || '').toLowerCase()) {
+      case 'en':
+        return 'English';
+      case 'ru':
+        return 'Russian';
+      case 'zh':
+        return 'Chinese (Simplified)';
+      case 'de':
+        return 'German';
+      case 'fr':
+        return 'French';
+      case 'es':
+        return 'Spanish';
+      default:
+        return null;
+    }
+  }
+
+  private toRasterForAnalysis(
+    imageUrl: string,
+  ): { mimeType: string; base64Data: string } | null {
+    const rasterMatch = imageUrl.match(
+      /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/,
+    );
+    if (rasterMatch) {
+      return { mimeType: rasterMatch[1], base64Data: rasterMatch[2] };
+    }
+
+    const svgMatch = imageUrl.match(/^data:image\/svg\+xml(;[^,]*)?,(.+)$/);
+    if (!svgMatch) return null;
+
+    const [, params, payload] = svgMatch;
+    let svg: string;
+    try {
+      svg = /;base64/i.test(params ?? '')
+        ? Buffer.from(payload, 'base64').toString('utf8')
+        : decodeURIComponent(payload);
+    } catch {
+      return null;
+    }
+
+    try {
+      const png = new Resvg(svg, {
+        background: '#FFFFFF',
+        fitTo: { mode: 'width', value: 768 },
+      })
+        .render()
+        .asPng();
+      return { mimeType: 'image/png', base64Data: png.toString('base64') };
+    } catch {
+      return null;
+    }
+  }
+
   private async analyzeClockTestWithAi(
     clockTestId: string,
     patientId: string,
@@ -418,20 +493,22 @@ export class ClinicalService {
     const geminiApiKey = this.config.get<string>('GEMINI_API_KEY');
     if (!geminiApiKey) return;
 
-    const match = imageUrl.match(
-      /^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/,
-    );
-    if (!match) {
+    const raster = this.toRasterForAnalysis(imageUrl);
+    if (!raster) {
       this.logger.log(
-        `Clock AI analysis skipped for ${clockTestId}: not a base64 raster image`,
+        `Clock AI analysis skipped for ${clockTestId}: image could not be prepared for analysis`,
       );
       return;
     }
-    const [, mimeType, base64Data] = match;
+    const { mimeType, base64Data } = raster;
     const targetTime =
       typeof submitMetadata?.targetTime === 'string'
         ? submitMetadata.targetTime
         : null;
+
+    const languageName = this.clinicalLanguageName(
+      typeof submitMetadata?.language === 'string' ? submitMetadata.language : null,
+    );
 
     const priorScores = await this.getPriorClockScores(patientId, clockTestId);
     const historyLine =
@@ -450,7 +527,12 @@ export class ClinicalService {
       'Respond with STRICT JSON only, no markdown fences, matching exactly this shape:',
       '{"score": <integer 0-5>, "summary": "<2-3 sentence plain-language summary for a family caregiver>", "observations": ["<specific things done well or poorly: circle, number placement, hand placement, time accuracy>"], "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>", "trend": "<one of: improving | stable | declining>", "trendNote": "<1 sentence explaining the trend vs previous scores; if no history, say this is the first recorded drawing>"}',
       'Rules: be factual about what is visible; never diagnose; use warm, non-alarming language; if the drawing is empty or uninterpretable, score it 0 and say so kindly.',
-    ].join('\n');
+      languageName
+        ? `Write every text field (summary, observations, concerns, recommendation, trendNote) in ${languageName}. Keep the JSON keys and the "trend" enum value in English.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
@@ -556,8 +638,9 @@ export class ClinicalService {
           userId: c.caregiverId,
           patientId,
           type: 'CLOCK_TEST_ANALYZED',
-          title: 'Clock drawing analyzed',
-          body: `AI review of the latest clock drawing is ready${score !== null ? ` (score ${score}/5)` : ''}. Open Test History to see it.`,
+          titleKey: 'clockAnalyzed.title',
+          bodyKey: score !== null ? 'clockAnalyzedScored.body' : 'clockAnalyzed.body',
+          params: score !== null ? { score } : undefined,
           metadata: { clockTestId, aiScore: score },
         }),
       ),
@@ -594,11 +677,11 @@ export class ClinicalService {
           userId: d.doctorId,
           patientId,
           type: scoreDrop >= 3 ? 'MMSE_SCORE_DROP_ALERT' : 'MMSE_COMPLETED',
-          title: scoreDrop >= 3 ? 'MMSE score drop alert' : 'MMSE completed',
-          body:
-            scoreDrop >= 3
-              ? `MMSE dropped by ${scoreDrop} points. Review patient urgently.`
-              : 'Patient completed MMSE test.',
+          titleKey:
+            scoreDrop >= 3 ? 'mmseDropDoctor.title' : 'mmseCompletedDoctor.title',
+          bodyKey:
+            scoreDrop >= 3 ? 'mmseDropDoctor.body' : 'mmseCompletedDoctor.body',
+          params: { scoreDrop },
           metadata: { mmseId: mmse.id, score: mmse.score, scoreDrop },
         }),
       ),
@@ -606,18 +689,18 @@ export class ClinicalService {
 
     await this.notifyCaregivers(
       patientId,
-      scoreDrop >= 3 ? 'Cognitive decline alert' : 'MMSE completed',
-      scoreDrop >= 3
-        ? `The latest MMSE dropped by ${scoreDrop} points (now ${mmse.score}/30). Consider contacting the doctor.`
-        : `MMSE completed with a score of ${mmse.score}/30.`,
+      scoreDrop >= 3 ? 'mmseDrop.title' : 'mmseCompleted.title',
+      scoreDrop >= 3 ? 'mmseDrop.body' : 'mmseCompleted.body',
+      { scoreDrop, score: mmse.score },
       scoreDrop >= 3 ? 'MMSE_SCORE_DROP_ALERT' : 'MMSE_COMPLETED',
       { mmseId: mmse.id, score: mmse.score, scoreDrop },
     );
 
-    void this.analyzeMmseWithAi(mmse.id, patientId).catch((e: unknown) =>
-      this.logger.warn(
-        `MMSE AI analysis failed for ${mmse.id}: ${e instanceof Error ? e.message : e}`,
-      ),
+    void this.analyzeMmseWithAi(mmse.id, patientId, dto.language).catch(
+      (e: unknown) =>
+        this.logger.warn(
+          `MMSE AI analysis failed for ${mmse.id}: ${e instanceof Error ? e.message : e}`,
+        ),
     );
 
     return mmse;
@@ -659,9 +742,14 @@ export class ClinicalService {
     return out;
   }
 
-  private async analyzeMmseWithAi(mmseId: string, patientId: string) {
+  private async analyzeMmseWithAi(
+    mmseId: string,
+    patientId: string,
+    language?: string | null,
+  ) {
     const geminiApiKey = this.config.get<string>('GEMINI_API_KEY');
     if (!geminiApiKey) return;
+    const languageName = this.clinicalLanguageName(language);
 
     const current = await this.prisma.mMSETest.findUnique({
       where: { id: mmseId },
@@ -694,7 +782,12 @@ export class ClinicalService {
       'Respond with STRICT JSON only, no markdown fences, matching exactly this shape:',
       '{"summary": "<2-3 sentence plain-language summary of what this score means for a family caregiver>", "trend": "<one of: improving | stable | declining>", "trendNote": "<1 sentence comparing to previous scores; if none, say this is the first recorded test>", "concerns": ["<possible cognitive-domain concerns, phrased cautiously, empty array if none>"], "recommendation": "<one gentle next-step suggestion for the caregiver>"}',
       'Rules: never diagnose; use warm, non-alarming language; a single score is only a snapshot.',
-    ].join('\n');
+      languageName
+        ? `Write every text field (summary, trendNote, concerns, recommendation) in ${languageName}. Keep the JSON keys and the "trend" enum value in English.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
@@ -765,8 +858,9 @@ export class ClinicalService {
 
     await this.notifyCaregivers(
       patientId,
-      'MMSE assessment ready',
-      `AI review of the latest MMSE (${current.score}/30) is ready. Open Test History to see it.`,
+      'mmseAnalyzed.title',
+      'mmseAnalyzed.body',
+      { score: current.score },
       'MMSE_TEST_ANALYZED',
       { mmseId, score: current.score, trend: aiAssessment.trend },
     );
@@ -785,15 +879,16 @@ export class ClinicalService {
     await this.createNotification({
       patientId,
       type: 'MMSE_ASSIGNED',
-      title: 'MMSE assigned',
-      body: 'Your doctor assigned a new MMSE test. Please complete it with your caregiver.',
+      titleKey: 'mmseAssigned.title',
+      bodyKey: 'mmseAssigned.body',
       actorId: doctorId,
       metadata: { patientId, patientName },
     });
     await this.notifyCaregivers(
       patientId,
-      `MMSE assigned to ${patientName}`,
-      `A doctor assigned an MMSE test. Please help ${patientName} complete it.`,
+      'mmseAssignedCaregiver.title',
+      'mmseAssignedCaregiver.body',
+      { name: patientName },
       'MMSE_ASSIGNED',
       { assignedBy: doctorId, patientId, patientName },
     );
@@ -813,15 +908,16 @@ export class ClinicalService {
     await this.createNotification({
       patientId,
       type: 'CLOCK_TEST_ASSIGNED',
-      title: 'Clock test assigned',
-      body: 'Your doctor assigned a new clock drawing test.',
+      titleKey: 'clockAssigned.title',
+      bodyKey: 'clockAssigned.body',
       actorId: doctorId,
       metadata: { patientId, patientName },
     });
     await this.notifyCaregivers(
       patientId,
-      `Clock test assigned to ${patientName}`,
-      `A doctor assigned a clock drawing test for ${patientName}.`,
+      'clockAssignedCaregiver.title',
+      'clockAssignedCaregiver.body',
+      { name: patientName },
       'CLOCK_TEST_ASSIGNED',
       { assignedBy: doctorId, patientId, patientName },
     );
@@ -874,8 +970,8 @@ export class ClinicalService {
     await this.createNotification({
       patientId,
       type: 'TREATMENT_ASSIGNED',
-      title: 'New treatment assigned',
-      body: 'A doctor assigned a new treatment plan.',
+      titleKey: 'treatmentAssigned.title',
+      bodyKey: 'treatmentAssigned.body',
       actorId: doctorId,
       metadata: { treatmentId: treatment.id },
     });
@@ -1214,8 +1310,9 @@ export class ClinicalService {
     await this.createNotification({
       patientId,
       type: 'CLOCK_TEST_RATED',
-      title: 'Clock test reviewed',
-      body: `Your doctor reviewed your clock drawing test (rating ${dto.rating}/5).`,
+      titleKey: 'clockReviewed.title',
+      bodyKey: 'clockReviewed.body',
+      params: { rating: dto.rating },
       actorId: doctorId,
       metadata: { clockTestId: updated.id, rating: dto.rating },
     });
@@ -1422,8 +1519,12 @@ export class ClinicalService {
     for (const member of thread.room.members) {
       await this.createNotification({
         userId: member.userId,
-        title: `New message from ${senderName}`,
-        body: trimmed.length > 100 ? `${trimmed.slice(0, 100)}…` : trimmed,
+        titleKey: 'newMessage.title',
+        bodyKey: 'newMessage.body',
+        params: {
+          sender: senderName,
+          text: trimmed.length > 100 ? `${trimmed.slice(0, 100)}…` : trimmed,
+        },
         type: 'CHAT_MESSAGE',
         metadata: { threadId, roomId: thread.room.id },
       });

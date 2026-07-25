@@ -58,4 +58,10 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(120)
   title?: string;
+
+  @ApiPropertyOptional({ enum: ['en', 'ru', 'zh', 'de', 'fr', 'es'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['en', 'ru', 'zh', 'de', 'fr', 'es'])
+  language?: string;
 }

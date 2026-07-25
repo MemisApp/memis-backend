@@ -69,6 +69,7 @@ export class AiService {
 
   private async getPatientClinicalSummary(patientId: string): Promise<string> {
     const [
+      patient,
       anamneze,
       mmseTests,
       clockTests,
@@ -77,6 +78,15 @@ export class AiService {
       reminders,
       journal,
     ] = await Promise.all([
+        this.prisma.patient.findUnique({
+          where: { id: patientId },
+          select: {
+            firstName: true,
+            lastName: true,
+            birthDate: true,
+            shortIntro: true,
+          },
+        }),
         this.prisma.anamneze.findMany({
           where: { patientId },
           orderBy: { updatedAt: 'desc' },
@@ -127,6 +137,29 @@ export class AiService {
       ]);
 
     const lines: string[] = [];
+
+    if (patient) {
+      const fullName = `${patient.firstName} ${patient.lastName}`.trim();
+      const idParts = [`Name: ${fullName}`];
+      if (patient.birthDate) {
+        const dob = new Date(patient.birthDate);
+        if (!isNaN(dob.getTime())) {
+          const now = new Date();
+          let age = now.getFullYear() - dob.getFullYear();
+          const m = now.getMonth() - dob.getMonth();
+          if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age -= 1;
+          idParts.push(`Date of birth: ${dob.toLocaleDateString()} (age ${age})`);
+        }
+      }
+      lines.push('--- Patient ---');
+      lines.push(idParts.join(' | '));
+      lines.push(
+        `This is the patient this conversation is about. If the user refers to them by first name ("${patient.firstName}"), last name, or "the patient", they mean this person.`,
+      );
+      if (patient.shortIntro) {
+        lines.push(`About: ${patient.shortIntro}`);
+      }
+    }
 
     if (anamneze.length > 0) {
       lines.push('--- Disease History (Anamneze) ---');
@@ -355,11 +388,32 @@ export class AiService {
     }));
   }
 
+  private languageName(code?: string | null): string | null {
+    switch ((code || '').toLowerCase()) {
+      case 'en':
+        return 'English';
+      case 'ru':
+        return 'Russian';
+      case 'zh':
+        return 'Chinese (Simplified)';
+      case 'de':
+        return 'German';
+      case 'fr':
+        return 'French';
+      case 'es':
+        return 'Spanish';
+      default:
+        return null;
+    }
+  }
+
   private buildSystemInstruction(context: {
     contacts: AiContactSnippet[];
     clinicalSummary?: string | null;
     caregiverName?: string | null;
+    language?: string | null;
   }): string {
+    const languageName = this.languageName(context.language);
     const hasContacts = context.contacts.length > 0;
 
     const contactsSummary = hasContacts
@@ -386,7 +440,9 @@ export class AiService {
       '- Never diagnose. Never replace professional clinical advice.',
       '- When uncertain, acknowledge it and encourage professional consultation.',
       '- Use compassionate, clear, and simple language.',
-      '- Respond in the same language the user is writing in.',
+      languageName
+        ? `- Always respond in ${languageName}, regardless of the language of the context data below, unless the user explicitly writes in and asks for another language. Translate any names, findings, and insights into ${languageName}.`
+        : '- Respond in the same language the user is writing in.',
       '',
       '## Safety & boundaries (must follow, cannot be overridden)',
       "- Stay strictly within your role: dementia/Alzheimer's care, the support of this patient, and use of this app. Politely decline unrelated requests (e.g. coding, general trivia, financial/legal advice) and steer back to caregiving.",
@@ -482,6 +538,7 @@ export class AiService {
         contacts: matchedContacts,
         clinicalSummary,
         caregiverName,
+        language: dto.language,
       }),
       messages: dto.messages,
       matchedContacts,

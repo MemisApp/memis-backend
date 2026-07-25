@@ -64,8 +64,13 @@ export class MonitoringScheduler {
           (!s?.lastDeclineAlertAt || s.lastDeclineAlertAt < report.lastTestAt)
         ) {
           await this.notify.notifyCaregivers(patient.id, {
-            title: 'Possible cognitive decline',
-            body: `${name}'s latest memory test dropped ${Math.abs(report.change ?? 0)} points (now ${report.latestScore}/30). Consider discussing with their doctor.`,
+            titleKey: 'cognitiveDecline.title',
+            bodyKey: 'cognitiveDecline.body',
+            params: {
+              name,
+              points: Math.abs(report.change ?? 0),
+              score: report.latestScore ?? 0,
+            },
             type: 'COGNITIVE_DECLINE',
             metadata: {
               patientId: patient.id,
@@ -162,13 +167,13 @@ export class MonitoringScheduler {
         }
 
         const digest = await this.digest.build(patient.id, freq);
-        const title =
-          freq === 'WEEKLY'
-            ? `Weekly update on ${digest.patientName}`
-            : `Daily update on ${digest.patientName}`;
         await this.notify.notifyCaregivers(patient.id, {
-          title,
-          body: digest.summary || 'No activity recorded.',
+          titleKey: freq === 'WEEKLY' ? 'careDigest.titleWeekly' : 'careDigest.titleDaily',
+          bodyKey: 'careDigest.body',
+          params: {
+            name: digest.patientName,
+            summary: digest.summary || 'No activity recorded.',
+          },
           type: 'CARE_DIGEST',
           metadata: { patientId: patient.id, period: freq },
         });

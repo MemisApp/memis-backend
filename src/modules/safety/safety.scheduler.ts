@@ -63,8 +63,9 @@ export class SafetyScheduler {
 
         const name = `${patient.firstName} ${patient.lastName}`.trim();
         await this.notify.notifyCaregivers(patient.id, {
-          title: 'Missed daily check-in',
-          body: `${name} hasn't checked in today. Please make sure they're OK.`,
+          titleKey: 'missedCheckIn.title',
+          bodyKey: 'missedCheckIn.body',
+          params: { name },
           type: 'CHECKIN_MISSED',
           metadata: { patientId: patient.id },
         });

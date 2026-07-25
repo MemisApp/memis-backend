@@ -1,0 +1,108 @@
+{
+  "doctorAssigned": {
+    "title": "New doctor assigned",
+    "body": "A doctor assigned you new assessments (MMSE and clock test)."
+  },
+  "doctorAssignedCaregiver": {
+    "title": "A doctor was assigned to your patient",
+    "body": "New MMSE and clock drawing tests have been assigned."
+  },
+  "clockCompleted": {
+    "title": "Clock test completed",
+    "body": "A patient has completed the clock drawing test."
+  },
+  "clockAnalyzed": {
+    "title": "Clock drawing analyzed",
+    "body": "AI review of the latest clock drawing is ready. Open Test History to see it."
+  },
+  "clockAnalyzedScored": {
+    "title": "Clock drawing analyzed",
+    "body": "AI review of the latest clock drawing is ready (score {{score}}/5). Open Test History to see it."
+  },
+  "mmseDrop": {
+    "title": "Cognitive decline alert",
+    "body": "The latest MMSE dropped by {{scoreDrop}} points (now {{score}}/30). Consider contacting the doctor."
+  },
+  "mmseCompleted": {
+    "title": "MMSE completed",
+    "body": "MMSE completed with a score of {{score}}/30."
+  },
+  "mmseDropDoctor": {
+    "title": "MMSE score drop alert",
+    "body": "MMSE dropped by {{scoreDrop}} points. Review patient urgently."
+  },
+  "mmseCompletedDoctor": {
+    "title": "MMSE completed",
+    "body": "Patient completed MMSE test."
+  },
+  "mmseAnalyzed": {
+    "title": "MMSE assessment ready",
+    "body": "AI review of the latest MMSE ({{score}}/30) is ready. Open Test History to see it."
+  },
+  "mmseAssigned": {
+    "title": "MMSE assigned",
+    "body": "Your doctor assigned a new MMSE test. Please complete it with your caregiver."
+  },
+  "mmseAssignedCaregiver": {
+    "title": "MMSE assigned to {{name}}",
+    "body": "A doctor assigned an MMSE test. Please help {{name}} complete it."
+  },
+  "clockAssigned": {
+    "title": "Clock test assigned",
+    "body": "Your doctor assigned a new clock drawing test."
+  },
+  "clockAssignedCaregiver": {
+    "title": "Clock test assigned to {{name}}",
+    "body": "A doctor assigned a clock drawing test for {{name}}."
+  },
+  "treatmentAssigned": {
+    "title": "New treatment assigned",
+    "body": "A doctor assigned a new treatment plan."
+  },
+  "clockReviewed": {
+    "title": "Clock test reviewed",
+    "body": "Your doctor reviewed your clock drawing test (rating {{rating}}/5)."
+  },
+  "newMessage": {
+    "title": "New message from {{sender}}",
+    "body": "{{text}}"
+  },
+  "leftSafeArea": {
+    "title": "⚠️ Left a safe area",
+    "body": "{{name}} appears to have left their safe area{{distanceText}}. Tap to see their location."
+  },
+  "sos": {
+    "title": "🆘 SOS — help needed",
+    "body": "{{name}} pressed the SOS button. Please contact them now.",
+    "bodyWithLocation": "{{name}} pressed the SOS button. Tap to see their location and call them now."
+  },
+  "cognitiveDecline": {
+    "title": "Possible cognitive decline",
+    "body": "{{name}}'s latest memory test dropped {{points}} points (now {{score}}/30). Consider discussing with their doctor."
+  },
+  "careDigest": {
+    "titleDaily": "Daily update on {{name}}",
+    "titleWeekly": "Weekly update on {{name}}",
+    "body": "{{summary}}"
+  },
+  "medNotLogged": {
+    "title": "Medication not logged",
+    "body": "{{name}} has {{missed}} medication dose(s) not marked as taken today. Please check in."
+  },
+  "medLow": {
+    "title": "Medication running low",
+    "body": "{{name}}'s {{medName}} is running low ({{quantity}} left). Time to refill."
+  },
+  "missedCheckIn": {
+    "title": "Missed daily check-in",
+    "body": "{{name}} hasn't checked in today. Please make sure they're OK."
+  },
+  "journalAdded": {
+    "title": "Journal entry added",
+    "body": "{{name}} filled out today's journal."
+  },
+  "journalUpdated": {
+    "title": "Journal entry updated",
+    "body": "{{name}} updated today's journal."
+  }
+}

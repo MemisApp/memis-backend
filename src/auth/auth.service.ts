@@ -466,6 +466,7 @@ export class AuthService {
         ...(dto.workplace !== undefined && { workplace: dto.workplace || null }),
         ...(dto.profession !== undefined && { profession: dto.profession || null }),
         ...(dto.title !== undefined && { title: dto.title || null }),
+        ...(dto.language !== undefined && { language: dto.language }),
       },
       select: {
         id: true,
@@ -478,6 +479,7 @@ export class AuthService {
         profession: true,
         title: true,
         role: true,
+        language: true,
         createdAt: true,
         updatedAt: true,
       },

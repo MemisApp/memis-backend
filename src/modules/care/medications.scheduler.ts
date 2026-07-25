@@ -104,8 +104,9 @@ export class MedicationsScheduler {
           if (missed > 0 && !alertedToday) {
             const name = `${patient.firstName} ${patient.lastName}`.trim();
             await this.notify.notifyCaregivers(patient.id, {
-              title: 'Medication not logged',
-              body: `${name} has ${missed} medication dose(s) not marked as taken today. Please check in.`,
+              titleKey: 'medNotLogged.title',
+              bodyKey: 'medNotLogged.body',
+              params: { name, missed },
               type: 'MEDICATION_MISSED',
               metadata: { patientId: patient.id, missed },
             });
@@ -133,8 +134,9 @@ export class MedicationsScheduler {
 
           const name = `${patient.firstName} ${patient.lastName}`.trim();
           await this.notify.notifyCaregivers(patient.id, {
-            title: 'Medication running low',
-            body: `${name}'s ${med.name} is running low (${med.quantity} left). Time to refill.`,
+            titleKey: 'medLow.title',
+            bodyKey: 'medLow.body',
+            params: { name, medName: med.name, quantity: med.quantity ?? 0 },
             type: 'MEDICATION_REFILL',
             metadata: { patientId: patient.id, medicationId: med.id },
           });

@@ -262,8 +262,9 @@ export class LocationService {
       : '';
 
     await this.notify.notifyCaregivers(patientId, {
-      title: '⚠️ Left a safe area',
-      body: `${name} appears to have left their safe area${distanceText}. Tap to see their location.`,
+      titleKey: 'leftSafeArea.title',
+      bodyKey: 'leftSafeArea.body',
+      params: { name, distanceText },
       type: 'WANDER_ALERT',
       metadata: { patientId, latitude: lat, longitude: lng },
     });
@@ -309,10 +310,9 @@ export class LocationService {
       : 'Your loved one';
 
     const count = await this.notify.notifyCaregivers(patientId, {
-      title: '🆘 SOS — help needed',
-      body: hasCoords
-        ? `${name} pressed the SOS button. Tap to see their location and call them now.`
-        : `${name} pressed the SOS button. Please contact them now.`,
+      titleKey: 'sos.title',
+      bodyKey: hasCoords ? 'sos.bodyWithLocation' : 'sos.body',
+      params: { name },
       type: 'SOS_ALERT',
       metadata: hasCoords
         ? { patientId, latitude: dto.latitude, longitude: dto.longitude }

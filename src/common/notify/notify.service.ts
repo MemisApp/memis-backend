@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PushService } from '../../modules/clinical/push.service';
+import { tNotify } from '../../i18n/notify-i18n';
 
 export interface CaregiverNotification {
-  title: string;
-  body: string;
+  titleKey: string;
+  bodyKey: string;
+  params?: Record<string, string | number>;
   type: string;
   metadata?: Record<string, unknown>;
 }
@@ -41,32 +43,53 @@ export class NotifyService {
     const caregiverIds = await this.getCaregiverIds(patientId);
     if (!caregiverIds.length) return 0;
 
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: caregiverIds } },
+      select: { id: true, language: true },
+    });
+    const langById = new Map(users.map((u) => [u.id, u.language]));
+
     await this.prisma.appNotification.createMany({
-      data: caregiverIds.map((userId) => ({
-        userId,
-        patientId,
-        title: n.title,
-        body: n.body,
-        type: n.type,
-        metadata: (n.metadata ?? {}) as Prisma.InputJsonValue,
-      })),
+      data: caregiverIds.map((userId) => {
+        const lang = langById.get(userId);
+        return {
+          userId,
+          patientId,
+          title: tNotify(lang, n.titleKey, n.params),
+          body: tNotify(lang, n.bodyKey, n.params),
+          type: n.type,
+          metadata: (n.metadata ?? {}) as Prisma.InputJsonValue,
+        };
+      }),
     });
 
     // Push delivery is best-effort: the in-app notifications above are already
     // persisted, so a push-provider hiccup must never fail the caller (this is
     // especially important for SOS, where the alert has effectively been sent).
-    try {
-      await this.push.sendToUsers(caregiverIds, n.title, n.body, {
-        type: n.type,
-        patientId,
-        ...(n.metadata ?? {}),
-      });
-    } catch (err) {
-      this.logger.error(
-        `[NOTIFY] Push dispatch failed for patient ${patientId} (${n.type}); ` +
-          `in-app notifications were still saved`,
-        err as Error,
-      );
+    // Group recipients by language so each gets a localized push.
+    const idsByLang = new Map<string | null | undefined, string[]>();
+    for (const id of caregiverIds) {
+      const lang = langById.get(id);
+      const arr = idsByLang.get(lang) ?? [];
+      arr.push(id);
+      idsByLang.set(lang, arr);
+    }
+
+    for (const [lang, ids] of idsByLang) {
+      try {
+        await this.push.sendToUsers(
+          ids,
+          tNotify(lang, n.titleKey, n.params),
+          tNotify(lang, n.bodyKey, n.params),
+          { type: n.type, patientId, ...(n.metadata ?? {}) },
+        );
+      } catch (err) {
+        this.logger.error(
+          `[NOTIFY] Push dispatch failed for patient ${patientId} (${n.type}); ` +
+            `in-app notifications were still saved`,
+          err as Error,
+        );
+      }
     }
 
     return caregiverIds.length;

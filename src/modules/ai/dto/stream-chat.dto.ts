@@ -32,4 +32,9 @@ export class StreamChatDto {
   @IsOptional()
   @IsString()
   conversationId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  language?: string;
 }

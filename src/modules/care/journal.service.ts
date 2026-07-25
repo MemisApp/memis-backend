@@ -85,8 +85,9 @@ export class JournalService {
       });
       const name = patient?.firstName || 'Your patient';
       await this.notify.notifyCaregivers(patientId, {
-        title: isNew ? 'Journal entry added' : 'Journal entry updated',
-        body: `${name} ${isNew ? 'filled out' : 'updated'} today's journal.`,
+        titleKey: isNew ? 'journalAdded.title' : 'journalUpdated.title',
+        bodyKey: isNew ? 'journalAdded.body' : 'journalUpdated.body',
+        params: { name },
         type: 'JOURNAL_FILLED',
         metadata: { entryId },
       });

@@ -6,7 +6,8 @@ services:
     runtime: node
     rootDir: .
     autoDeploy: true
-    buildCommand: npm install && npm run build:render
+    buildCommand: npm install && npx prisma generate && npm run build
+    preDeployCommand: npx prisma migrate deploy
     startCommand: npm run start:prod
     healthCheckPath: /health
     envVars:

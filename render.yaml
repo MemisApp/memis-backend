@@ -5,6 +5,7 @@ services:
     name: memis-api
     runtime: node
     rootDir: .
+    autoDeploy: true
     buildCommand: npm install && npm run build:render
     startCommand: npm run start:prod
     healthCheckPath: /health

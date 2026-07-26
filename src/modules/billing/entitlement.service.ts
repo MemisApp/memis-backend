@@ -96,8 +96,44 @@ export class EntitlementService {
     }
   }
 
-  async consumeAiMessage(userId: string): Promise<void> {
+  async assertCanInviteCaregiver(
+    userId: string,
+    patientId: string,
+  ): Promise<void> {
     const { limits } = await this.getEffectivePlan(userId);
+
+    if (!limits.entitlements.multi_caregiver) {
+      throw new ForbiddenException({
+        code: 'UPGRADE_REQUIRED',
+        entitlement: 'multi_caregiver',
+        message:
+          'Inviting other caregivers requires Memis Family. Upgrade to share care with your family.',
+      });
+    }
+
+    const [seats, pending] = await Promise.all([
+      this.prisma.patientCaregiver.count({ where: { patientId } }),
+      this.prisma.caregiverInvite.count({
+        where: { patientId, status: 'PENDING' },
+      }),
+    ]);
+
+    if (seats + pending >= limits.maxCaregivers) {
+      throw new ForbiddenException({
+        code: 'UPGRADE_REQUIRED',
+        entitlement: 'max_caregivers',
+        message: `Your plan allows up to ${limits.maxCaregivers} caregivers per patient.`,
+      });
+    }
+  }
+
+  async getTestHistoryLimit(userId: string): Promise<number | null> {
+    const { limits } = await this.getEffectivePlan(userId);
+    return limits.testHistoryLimit;
+  }
+
+  async consumeAiMessage(userId: string): Promise<void> {
+    const { plan, limits } = await this.getEffectivePlan(userId);
     const period = currentBillingPeriod();
 
     const usage = await this.prisma.aiUsage.upsert({
@@ -113,7 +149,10 @@ export class EntitlementService {
       throw new ForbiddenException({
         code: 'AI_QUOTA_EXCEEDED',
         entitlement: 'ai_messages',
-        message: `You have used your ${limits.aiMessagesPerMonth} free AI messages this month. Upgrade for unlimited access.`,
+        message:
+          plan === SubscriptionPlan.FREE
+            ? `You have used your ${limits.aiMessagesPerMonth} free AI messages this month. Upgrade for unlimited access.`
+            : `You have reached this month's fair-use limit of ${limits.aiMessagesPerMonth} AI messages. It resets at the start of next month.`,
       });
     }
 

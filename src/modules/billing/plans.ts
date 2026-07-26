@@ -14,28 +14,38 @@ export type EntitlementKey =
 export interface PlanLimits {
   aiMessagesPerMonth: number | null;
   maxPatients: number;
+  maxCaregivers: number;
+  testHistoryLimit: number | null;
   entitlements: Record<EntitlementKey, boolean>;
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   FREE: {
-    aiMessagesPerMonth: 10,
+    aiMessagesPerMonth: 20,
     maxPatients: 1,
+    maxCaregivers: 1,
+    testHistoryLimit: 3,
     entitlements: {
       ai_patient_context: false,
       clinical_insights: false,
       medication_management: false,
       journaling: false,
       pdf_export: false,
-      accessibility_suite: false,
+      // Accessibility is never paywalled: the people who need large text and
+      // high contrast are the patients themselves.
+      accessibility_suite: true,
       multi_caregiver: false,
       safety_location: false,
       care_digest: false,
     },
   },
   PLUS: {
-    aiMessagesPerMonth: null,
+    // Fair-use ceiling rather than truly unlimited; protects the AI budget
+    // without ever being reachable by a real caregiver.
+    aiMessagesPerMonth: 500,
     maxPatients: 1,
+    maxCaregivers: 1,
+    testHistoryLimit: null,
     entitlements: {
       ai_patient_context: true,
       clinical_insights: true,
@@ -50,8 +60,12 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     },
   },
   FAMILY: {
-    aiMessagesPerMonth: null,
-    maxPatients: 25,
+    aiMessagesPerMonth: 500,
+    // Consumer ceiling. Professional/facility use belongs in a future Pro tier
+    // rather than leaking into the cheapest multi-patient plan.
+    maxPatients: 3,
+    maxCaregivers: 10,
+    testHistoryLimit: null,
     entitlements: {
       ai_patient_context: true,
       clinical_insights: true,

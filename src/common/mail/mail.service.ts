@@ -79,11 +79,11 @@ export class MailService {
 
   async sendWelcomeEmail(to: string, name?: string) {
     const html = buildBrandedEmailHtml({
-      preheader: 'Your Memis account is ready. Start your 7-day free trial.',
+      preheader: 'Your Memis account is ready, with 14 days of Memis Plus included.',
       title: 'Welcome to Memis',
       bodyHtml: `<p style="margin:0 0 12px;">Hi ${name || 'there'},</p>
         <p style="margin:0 0 12px;">Your email is verified and your account is fully active.</p>
-        <p style="margin:0;">You now have access to Memis, including your <strong>7-day free trial of Memis Plus</strong>. Open the app to add a patient, set reminders, and invite family members to your care circle.</p>`,
+        <p style="margin:0;">You now have access to Memis, including <strong>14 days of Memis Plus</strong> &mdash; no card required. Open the app to add a patient, set reminders, and turn on location safety for your loved one.</p>`,
       cta: { label: 'Open Memis', href: this.webAppLinkBase },
       appUrl: this.appUrl,
     });

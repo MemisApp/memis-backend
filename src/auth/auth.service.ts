@@ -134,7 +134,8 @@ export class AuthService {
 
     const accessToken = await this.signAccessToken(user.id, user.role);
 
-    // Start a 7-day Plus trial so new caregivers experience the premium value.
+    // Reverse trial: 14 days of Plus with no card, so the safety and adherence
+    // alerts have time to fire at least once before the paywall appears.
     await this.billing.startTrialIfEligible(user.id);
 
     // Verification email (does not block registration).

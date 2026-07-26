@@ -20,6 +20,7 @@ import { CreateDoctorNoteDto } from './dto/create-doctor-note.dto';
 import { CreateAiRecommendationDto } from './dto/create-ai-recommendation.dto';
 import { RateClockTestDto } from './dto/rate-clock-test.dto';
 import { PushService } from './push.service';
+import { EntitlementService } from '../billing/entitlement.service';
 
 @Injectable()
 export class ClinicalService {
@@ -29,6 +30,7 @@ export class ClinicalService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly pushService: PushService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   private ensureDoctor(role: string) {
@@ -1152,8 +1154,10 @@ export class ClinicalService {
     patientId: string,
   ) {
     await this.ensureCaregiverAccess(caregiverId, patientId);
+    const limit = await this.entitlements.getTestHistoryLimit(caregiverId);
     return this.prisma.mMSETest.findMany({
       where: { patientId },
+      ...(limit !== null ? { take: limit } : {}),
       // Return stored answers so caregivers can see the question-by-question
       // breakdown (also used by the PDF doctor-visit report).
       select: {
@@ -1173,8 +1177,10 @@ export class ClinicalService {
     patientId: string,
   ) {
     await this.ensureCaregiverAccess(caregiverId, patientId);
+    const limit = await this.entitlements.getTestHistoryLimit(caregiverId);
     return this.prisma.clockTest.findMany({
       where: { patientId },
+      ...(limit !== null ? { take: limit } : {}),
       select: {
         id: true,
         createdAt: true,

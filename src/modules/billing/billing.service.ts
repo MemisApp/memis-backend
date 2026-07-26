@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { planFromProductId } from './plans';
 
-const TRIAL_DAYS = 7;
+const TRIAL_DAYS = 14;
 
 interface UpsertSubscriptionInput {
   userId: string;

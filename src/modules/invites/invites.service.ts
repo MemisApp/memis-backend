@@ -9,6 +9,7 @@ import { CaregiverRole, InviteStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../common/mail/mail.service';
 import { ChatService } from '../chat/chat.service';
+import { EntitlementService } from '../billing/entitlement.service';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -18,6 +19,7 @@ export class InvitesService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly chat: ChatService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   private makeToken(): { raw: string; hashed: string } {
@@ -31,12 +33,12 @@ export class InvitesService {
   }
 
   /** Only an OWNER caregiver (or ADMIN) of the patient may manage invites. */
-  private async assertOwner(userId: string, patientId: string): Promise<void> {
+  private async assertOwner(userId: string, patientId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
-    if (user?.role === 'ADMIN') return;
+    if (user?.role === 'ADMIN') return true;
     const link = await this.prisma.patientCaregiver.findUnique({
       where: { patientId_caregiverId: { patientId, caregiverId: userId } },
       select: { role: true },
@@ -44,6 +46,7 @@ export class InvitesService {
     if (!link || link.role !== 'OWNER') {
       throw new ForbiddenException('Only the primary caregiver can invite');
     }
+    return false;
   }
 
   async createInvite(
@@ -52,7 +55,10 @@ export class InvitesService {
     email: string,
     role: CaregiverRole,
   ) {
-    await this.assertOwner(userId, patientId);
+    const isAdmin = await this.assertOwner(userId, patientId);
+    if (!isAdmin) {
+      await this.entitlements.assertCanInviteCaregiver(userId, patientId);
+    }
 
     const normalizedEmail = email.trim().toLowerCase();
 

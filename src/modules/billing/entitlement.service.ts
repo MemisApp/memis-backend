@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
+  CaregiverRole,
   Subscription,
   SubscriptionPlan,
   SubscriptionStatus,
@@ -132,7 +133,36 @@ export class EntitlementService {
     return limits.testHistoryLimit;
   }
 
-  async consumeAiMessage(userId: string): Promise<void> {
+  /**
+   * Patient devices authenticate with a Patient id, which is not a User row —
+   * billing and AI quota always belong to the caregiver who owns the patient.
+   * Returns null when a patient has no caregiver link yet.
+   */
+  async resolveBillingUserId(
+    actorId: string,
+    role?: string,
+  ): Promise<string | null> {
+    if (role !== 'PATIENT') return actorId;
+
+    const owner = await this.prisma.patientCaregiver.findFirst({
+      where: { patientId: actorId, role: CaregiverRole.OWNER },
+      orderBy: { createdAt: 'asc' },
+      select: { caregiverId: true },
+    });
+    if (owner) return owner.caregiverId;
+
+    const anyCaregiver = await this.prisma.patientCaregiver.findFirst({
+      where: { patientId: actorId },
+      orderBy: { createdAt: 'asc' },
+      select: { caregiverId: true },
+    });
+    return anyCaregiver?.caregiverId ?? null;
+  }
+
+  async consumeAiMessage(actorId: string, role?: string): Promise<void> {
+    const userId = await this.resolveBillingUserId(actorId, role);
+    if (!userId) return;
+
     const { plan, limits } = await this.getEffectivePlan(userId);
     const period = currentBillingPeriod();
 
@@ -162,8 +192,14 @@ export class EntitlementService {
     });
   }
 
-  async getAiUsage(userId: string): Promise<{ used: number; limit: number | null }> {
-    const { limits } = await this.getEffectivePlan(userId);
+  async getAiUsage(
+    actorId: string,
+    role?: string,
+  ): Promise<{ used: number; limit: number | null }> {
+    const userId = await this.resolveBillingUserId(actorId, role);
+    const { limits } = await this.getEffectivePlan(userId ?? actorId);
+    if (!userId) return { used: 0, limit: limits.aiMessagesPerMonth };
+
     const period = currentBillingPeriod();
     const usage = await this.prisma.aiUsage.findUnique({
       where: { userId_period: { userId, period } },

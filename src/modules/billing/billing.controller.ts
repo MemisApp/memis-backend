@@ -34,8 +34,16 @@ export class BillingController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current plan, limits, trial status and AI usage' })
   async getMyBilling(@Req() req: AuthedRequest) {
-    const effective = await this.entitlements.getEffectivePlan(req.user.id);
-    const aiUsage = await this.entitlements.getAiUsage(req.user.id);
+    const billingUserId =
+      (await this.entitlements.resolveBillingUserId(
+        req.user.id,
+        req.user.role,
+      )) ?? req.user.id;
+    const effective = await this.entitlements.getEffectivePlan(billingUserId);
+    const aiUsage = await this.entitlements.getAiUsage(
+      req.user.id,
+      req.user.role,
+    );
     return {
       plan: effective.plan,
       status: effective.status,

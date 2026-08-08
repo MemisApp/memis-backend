@@ -105,7 +105,7 @@ export class AiController {
   @Post('/chat')
   @ApiOperation({ summary: 'Non-streaming AI chat (for Android / fallback)' })
   async chat(@Req() req: AuthenticatedRequest, @Body() dto: StreamChatDto) {
-    await this.entitlements.consumeAiMessage(req.user.id);
+    await this.entitlements.consumeAiMessage(req.user.id, req.user.role);
     dto.patientId = await this.resolveContextPatientId(
       req.user.id,
       req.user.role,
@@ -180,7 +180,7 @@ export class AiController {
     @Body() dto: StreamChatDto,
     @Res() res: Response,
   ) {
-    await this.entitlements.consumeAiMessage(req.user.id);
+    await this.entitlements.consumeAiMessage(req.user.id, req.user.role);
     dto.patientId = await this.resolveContextPatientId(
       req.user.id,
       req.user.role,
